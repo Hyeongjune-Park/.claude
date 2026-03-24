@@ -66,14 +66,22 @@ Follow this sequence:
 
 4. Determine document mapping.
    Prefer this order:
+   - explicit target files named in the current session or in the plan-save output
    - project-specific mapping from project `CLAUDE.md` or project-local docs rules
-   - existing project docs that clearly match the buckets
+   - existing feature-specific docs that clearly match the current feature or scoped change
+   - existing shared project docs that clearly match the buckets
    - default project-local paths:
-     - `docs/context.md`
-     - `docs/plan.md`
-     - `docs/tasks.md`
-     - `docs/decisions.md`
-     - `docs/risks.md`
+     - for feature-scoped saves, prefer:
+       - `docs/plan-<feature-slug>.md`
+       - `docs/decisions-<feature-slug>.md`
+       - `docs/tasks-<feature-slug>.md` only if needed
+       - `docs/risks-<feature-slug>.md` only if needed
+     - for project-wide saves, prefer:
+       - `docs/context.md`
+       - `docs/plan.md`
+       - `docs/tasks.md`
+       - `docs/decisions.md`
+       - `docs/risks.md`
 
 5. Normalize every target path and verify it stays inside the active project root.
 
@@ -105,23 +113,22 @@ These rules are strict:
 
 Use project-specific mapping when available.
 
-Examples:
+If the current save is clearly feature-scoped, prefer feature-specific docs before shared docs.
+
+Examples for feature-scoped saves:
+- `plan -> docs/plan-<feature-slug>.md`
+- `decisions -> docs/decisions-<feature-slug>.md`
+- `tasks -> docs/tasks-<feature-slug>.md` when task content needs its own file
+- `risks -> docs/risks-<feature-slug>.md` when risk content needs its own file
+
+Examples for project-wide saves:
 - `context -> docs/context.md`
 - `plan -> docs/plan.md`
 - `tasks -> docs/tasks.md`
 - `decisions -> docs/decisions.md`
 - `risks -> docs/risks.md`
 
-If no project-specific mapping exists, use the default project-local `docs/*.md` files.
-
-Do not invent bucket names outside:
-- context
-- plan
-- tasks
-- decisions
-- risks
-
-unless the project explicitly defines them.
+If explicit target files were already established earlier in the session, reuse them unless they are unsafe or clearly inconsistent with project guidance.
 
 ## Content rules
 
@@ -147,6 +154,10 @@ If a file already exists but the current session cannot safely merge changes, do
 Prefer:
 - appending a clearly labeled update section, or
 - leaving the file unchanged and reporting the merge uncertainty
+
+If a feature-specific doc already exists for the same change, update that file instead of creating a second near-duplicate filename.
+Prefer one canonical file per bucket for a given feature.
+If both shared and feature-specific docs exist, prefer the file lineage established by the current session unless project guidance clearly overrides it.
 
 ## Output requirements
 

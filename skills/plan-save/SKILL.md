@@ -91,6 +91,28 @@ Follow this sequence:
 - Do not promote provisional implementation details into `decisions` merely because they were not challenged.
 - Prefer storing unresolved implementation content in `tasks` and `risks` instead.
 
+## Document target strategy
+
+If the current session is centered on a single feature, endpoint, or scoped change, prefer feature-specific docs under `docs/` instead of forcing everything into shared project-wide files.
+
+Preferred defaults for feature-scoped saves:
+- `docs/plan-<feature-slug>.md`
+- `docs/decisions-<feature-slug>.md`
+
+Use `docs/tasks-<feature-slug>.md` or `docs/risks-<feature-slug>.md` only when those buckets contain enough durable standalone content to justify separate files.
+
+Use shared files such as:
+- `docs/context.md`
+- `docs/plan.md`
+- `docs/tasks.md`
+- `docs/decisions.md`
+- `docs/risks.md`
+
+only when:
+- project guidance explicitly requires them, or
+- the content is project-wide rather than feature-scoped.
+
+If an existing feature-specific file already matches the current change, prefer reusing that file rather than proposing a new nearby variant.
 
 ## Bucket rules
 
@@ -166,6 +188,8 @@ For each relevant bucket, list:
 - whether it should be updated now
 - why it belongs there
 - whether the content is confirmed, accepted, provisional, or unresolved
+- proposed target file path
+- preferred write mode if known (`create`, `update`, `append`, or `section-update`)
 
 Use only relevant buckets.
 

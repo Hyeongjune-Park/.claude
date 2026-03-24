@@ -5,7 +5,7 @@ description: Run a structured critical review on a plan, proposal, implementatio
 
 Use this skill to produce a structured review result.
 
-This skill is for resview only.
+This skill is for review only.
 Do not implement code.
 Do not generate patches.
 Do not rewrite the entire target unless the review target is fundamentally unusable.

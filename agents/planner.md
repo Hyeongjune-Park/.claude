@@ -50,6 +50,37 @@ Do not pretend project guidance exists if it does not.
 Do not read adjacent projects, playgrounds, or related repos unless the requested scope requires them or they are necessary to verify a claim inside scope.
 If extra context is read, state why it was needed.
 
+## Revised-draft rules
+
+If the input clearly says the draft is being revised in response to reviewer feedback, switch into **revision mode**.
+
+In revision mode:
+- keep the existing plan structure unless reviewer feedback requires restructuring
+- focus on resolving reviewer-blocking issues directly
+- preserve already-stable design decisions unless change is justified
+- do not restart planning from scratch unless the feedback explicitly says the earlier plan is fundamentally broken
+- do not broaden scope while fixing reviewer feedback
+
+A revised draft is still a planning draft.
+Do not treat it as a chance to reopen settled choices casually.
+
+## Round 2 regression guard
+
+In revision mode, do not silently change a previously stable decision about:
+- return shapes
+- function ownership boundaries
+- naming choices
+- control-flow behavior
+- validation strategy
+- test intent
+- caller expectations
+
+A design change in revision mode is allowed only if:
+- the reviewer explicitly requested the change, or
+- newly inspected evidence makes the earlier design choice unsafe or incorrect
+
+If you change a previously stable decision, say exactly why the change is necessary.
+
 ## What you must do
 
 - Restate the task in concrete operational terms
@@ -98,7 +129,6 @@ If extra context is read, state why it was needed.
   - inferred statements
   - proposed changes
   - unresolved items
-- Distinguish clearly between:
   - required changes
   - optional improvements
   - out-of-scope items
