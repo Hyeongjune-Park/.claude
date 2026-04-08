@@ -30,7 +30,7 @@ The implementation artifact must include:
 - validation evidence refs or inline raw excerpts
 - issues encountered
 - unresolved follow-up risks
-- one valid implementing control block
+- one valid implementing artifact metadata block
 
 Normal successful next step is `final_review`.
 Do not emit `next_allowed: [reviewing]` from implementation.

@@ -63,7 +63,7 @@ Return:
 - non-blocking issues
 - required revisions
 - verdict
-- one valid reviewing control block
+- one valid reviewing artifact metadata block
 
 Use `workflow_stage: reviewing`.
 Normal approved next step is `implementation_design`.

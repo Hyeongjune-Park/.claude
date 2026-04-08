@@ -59,7 +59,7 @@ Return:
 - non-blocking issues
 - required revisions
 - verdict
-- one valid implementation_review control block
+- one valid implementation_review artifact metadata block
 
 Normal approved next step is `implementing`.
 

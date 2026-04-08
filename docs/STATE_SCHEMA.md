@@ -30,7 +30,7 @@ Create them when first persistence is needed.
 
 Use this authority order:
 1. current state file
-2. latest valid workflow artifact control block
+2. latest valid workflow artifact metadata block
 3. persisted policy-resolution input
 4. persisted read-ledger input
 5. grounded project inspection
@@ -278,7 +278,7 @@ After each completed stage:
 1. persist policy-resolution input
 2. if the next stage is a review stage, persist its read-ledger input
 3. save the workflow artifact
-4. extract the control block
+4. extract the artifact metadata block
 5. normalize the resulting workflow state
 6. update the state file
 7. only then re-run controller state determination
@@ -307,6 +307,7 @@ When the current artifact is an implementation artifact:
 
 ## Summary
 
+The canonical workflow artifact metadata format is YAML front-matter at the top of each artifact.
 The state file is the machine-readable current truth for one feature workflow.
 
 It must capture:

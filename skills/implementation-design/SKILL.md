@@ -26,7 +26,7 @@ Return an implementation design that includes:
 - execution order
 - validation plan
 - risks or open questions
-- one valid implementation_design control block
+- one valid implementation_design artifact metadata block
 
 ## Non-goal
 

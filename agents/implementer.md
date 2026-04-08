@@ -25,7 +25,7 @@ The implementation result must state:
 - validations run
 - pass/fail per validation step
 - any issues encountered
-- one valid implementing control block
+- one valid implementing artifact metadata block
 
 ## Validation discipline
 

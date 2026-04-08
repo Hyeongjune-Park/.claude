@@ -189,7 +189,7 @@ If a review artifact claims direct reads outside its ledger:
 
 A transition is valid only when all are true:
 1. the stage output exists as a workflow artifact under `.claude/workflow/<feature-slug>/`
-2. the artifact contains a valid control block
+2. the artifact contains a valid metadata block
 3. the current state reflects that artifact
 4. the controller decision uses the updated state
 5. for review stages, the referenced read ledger exists and matches the review artifact

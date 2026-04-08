@@ -22,7 +22,7 @@ The orchestration layer must provide:
 - active project root
 - persisted policy-resolution input
 - current state file contents when present
-- relevant workflow artifact control blocks when needed
+- relevant workflow artifact metadata blocks when needed
 - persisted review-stage read ledger when the next step is a review stage
 
 ## Non-goals
@@ -39,7 +39,7 @@ The controller must not:
 
 Use this order:
 1. valid state file
-2. latest valid workflow artifact control block
+2. latest valid workflow artifact metadata block
 3. fresh-start default when neither exists
 
 Do not invent reads.

@@ -31,7 +31,7 @@ A specialist must not replace workflow control.
 
 Workflow decisions must prefer:
 1. `.claude/state/<feature-slug>.json`
-2. valid workflow artifact control blocks
+2. valid workflow artifact metadata blocks
 3. persisted policy-resolution input
 4. persisted read-ledger input
 5. workflow-state-machine rules

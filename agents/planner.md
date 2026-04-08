@@ -28,7 +28,7 @@ The plan must include:
 - risks
 - validation strategy
 - evidence summary
-- one valid planning control block
+- one valid planning artifact metadata block
 
 ## Evidence discipline
 

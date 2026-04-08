@@ -17,6 +17,19 @@ The main workflow is driven by:
 
 Human-facing docs are not workflow checkpoints.
 
+## Post-stage commit rule
+
+After any specialist returns an artifact, immediately write the full returned artifact to its canonical workflow path before doing anything else.
+
+Then:
+1. validate the saved artifact's artifact metadata block,
+2. update `.claude/state/<feature-slug>.json`,
+3. re-run controller against the updated state.
+
+If the artifact was not written, do not consider the stage complete.
+Do not stop after displayed output alone.
+Do not report success from unsaved stage output.
+
 ## Required policy docs
 
 Required docs:
@@ -126,8 +139,8 @@ This skill is responsible for:
 - creating read ledgers for review stages
 - invoking exactly one legal specialist stage at a time
 - saving workflow artifacts
-- extracting control blocks
-- verifying control-block consistency
+- extracting metadata blocks
+- verifying metadata block consistency
 - verifying review artifacts against their bound ledgers
 - updating machine-readable state
 - re-running controller after each persisted transition
@@ -146,23 +159,13 @@ This skill is responsible for:
 
 Repeat until stop or completion:
 1. resolve required policy docs
-2. persist normalized policy resolution
-3. stop if required docs are missing or policy resolution is inconsistent
-4. call controller with resolved policy status and current state/artifact inputs
-5. if controller says stop, stop
-6. if the next step is a review stage, create and persist the read ledger for that stage
-7. invoke exactly one specialist stage matching `next_step`
-8. save the stage artifact
-9. extract the control block
-10. verify control-block consistency
-11. if the stage is a review stage, verify:
-    - `artifact_under_review` matches the read ledger
-    - `read_ledger_ref` matches the persisted ledger
-    - `direct_reads_used` is a subset of `allowed_direct_reads`
-    - `missing_read_targets` is accurate
-    - `evidence_gate` is consistent with the ledger and missing-read set
-12. update `.claude/state/<feature-slug>.json`
-13. re-run controller
+2. persist policy-resolution input
+3. call controller
+4. if next step is a review stage, persist its read ledger
+5. invoke exactly one specialist stage
+6. write the returned artifact to its canonical workflow path
+7. update `.claude/state/<feature-slug>.json`
+8. re-run controller
 
 Do not skip step 12.
 

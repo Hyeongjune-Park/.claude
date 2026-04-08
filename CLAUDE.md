@@ -11,6 +11,6 @@ Treat people-facing docs, workflow artifacts, and machine-readable state as diff
 - current workflow state lives under `.claude/state/<feature>.json`
 
 Do not use `docs/` as the source of truth for workflow progression.
-Do not hide workflow state in freeform prose when a control block or state file exists.
+Do not hide workflow state in freeform prose when a artifact metadata block or state file exists.
 Do not continue past a required gate without current approval.
 If root, feature, scope, or policy is ambiguous, stop and surface it.

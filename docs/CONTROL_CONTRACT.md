@@ -8,39 +8,29 @@ status: active
 
 ## Purpose
 
-This document defines the required YAML control block used by workflow artifacts.
+This document defines the required YAML artifact metadata block used by workflow artifacts.
 
-Every specialist-stage artifact that advances or blocks the workflow must end with exactly one YAML control block.
+Every specialist-stage artifact that advances or blocks the workflow must begin with exactly one YAML front-matter metadata block.
 
 ## Required shape
 
 ```yaml
-control:
-  workflow_stage: <stage>
-  feature_slug: <feature-slug>
-  scope_fingerprint: <scope-fingerprint-or-null>
-  status: <completed|incomplete|blocked>
-  verdict: <none|approved|approved_with_revisions|not_approved>
-  next_allowed:
-    - <step-name-or-none>
-  blocker_present: <true|false>
-  blocker_reason: ""
-  human_input_required: <true|false>
-  stale_conditions:
-    - <condition>
-  active_project_root: <root-path>
-  policy_resolution_ref: <path-or-null>
-  artifact_under_review: <path-or-null>
-  read_ledger_ref: <path-or-null>
-  required_read_targets:
-    - <path-or-target-name>
-  allowed_direct_reads:
-    - <path-or-target-name>
-  direct_reads_used:
-    - <path-or-target-name>
-  missing_read_targets:
-    - <path-or-target-name>
-  evidence_gate: <not_applicable|passed|failed>
+---
+workflow_stage: <stage>
+feature_slug: <feature-slug>
+artifact_type: <artifact-type>
+status: <status>
+artifact_under_review: <path-or-null>
+read_ledger_ref: <path-or-null>
+required_read_targets:
+  - <path-or-target-name>
+direct_reads_used:
+  - <path-or-target-name>
+missing_read_targets:
+  - <path-or-target-name>
+evidence_gate: <not_applicable|passed|failed>
+verdict: <none|approved|approved_with_revisions|not_approved>
+---
 ```
 
 ## Field rules
@@ -234,7 +224,7 @@ This stage is for plan review only.
 
 ## Artifact-body requirement
 
-Review artifacts must contain a human-readable slot-based evidence section that matches the control block.
+Review artifacts must contain a human-readable slot-based evidence section that matches the artifact metadata block.
 
 Required slots:
 - artifact under review
@@ -258,7 +248,7 @@ Use these canonical workflow artifact paths:
 
 ## Consistency rule
 
-A control block must be internally consistent.
+A artifact metadata block must be internally consistent.
 
 Examples of invalid combinations:
 - `status: completed` with `blocker_present: true`
@@ -272,7 +262,7 @@ Examples of invalid combinations:
 
 ## Summary
 
-The control block is the structured handoff between workflow stages.
+The artifact metadata block is the structured handoff between workflow stages.
 
 For review stages, it is not enough to state a verdict.
 The artifact must show that the review stayed within its bound inputs.

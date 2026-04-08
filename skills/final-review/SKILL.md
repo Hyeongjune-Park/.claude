@@ -65,7 +65,7 @@ Return:
 - blocking issues
 - non-blocking issues
 - verdict
-- one valid final_review control block
+- one valid final_review artifact metadata block
 
 Normal approved next step is `none`.
 Use `workflow_stage: final_review`.
