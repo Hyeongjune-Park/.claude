@@ -1,12 +1,16 @@
-Always plan before large or risky changes.
-Separate planning from review.
-Do not claim completion before a self-check.
-Keep changes scoped and explain risks when relevant.
+Use control-flow as the primary entry point for non-trivial workflow execution.
 
-Keep inspected facts, inferred statements, and proposed decisions clearly separate.
-Do not present unverified behavior, runtime assumptions, or config behavior as confirmed fact.
-Do not use exact line numbers unless they were directly verified in the current session.
-Prefer function, block, or file references over unstable line-level precision.
-If review status is Not approved, do not treat plan details as established implementation decisions.
-Do not broaden scope to adjacent projects, playgrounds, or repos unless the request clearly requires it.
-If validation depends on mutable state, repeated runs, or demo sequencing, specify the isolation method or mark it unresolved.
+Keep the control plane and the work plane separate.
+- controller and control-flow decide state and next step
+- specialist skills produce planning, review, design, implementation, or worklog artifacts
+- specialist skills do not own workflow state
+
+Treat people-facing docs, workflow artifacts, and machine-readable state as different things.
+- people-facing docs live under `docs/`
+- governing workflow artifacts live under `.claude/workflow/<feature>/`
+- current workflow state lives under `.claude/state/<feature>.json`
+
+Do not use `docs/` as the source of truth for workflow progression.
+Do not hide workflow state in freeform prose when a control block or state file exists.
+Do not continue past a required gate without current approval.
+If root, feature, scope, or policy is ambiguous, stop and surface it.
