@@ -1,95 +1,92 @@
 ---
 title: HARNESS_SCOPE
-version: 2
+version: 3
 status: active
 ---
 
 # HARNESS_SCOPE
 
-## Purpose
+## 목적
 
-This document defines what the harness may automate, what it must not infer, and when it must stop.
+이 문서는 하니스가 자동화해도 되는 범위, 자동으로 추론하면 안 되는 범위, 그리고 반드시 stop해야 하는 상황을 정한다.
 
-## Intended use
+## 대상 범위
 
-This harness is optimized for:
-- single-feature work
-- small to medium backend or full-stack tasks
-- greenfield or lightly populated project roots
-- workflows that benefit from planning, review, implementation design, implementation review, implementation, and final review
+이 하니스는 기본적으로 아래 작업에 맞춘다.
+- 단일 feature workflow
+- small~medium 규모의 backend 또는 full-stack 작업
+- 비어 있거나 파일 수가 많지 않은 project root
+- `planning → reviewing → implementation_design → implementation_review → implementing → final_review`
 
 ## In scope
 
-The harness may automate:
-- feature-scoped planning
-- plan review
-- implementation design
-- implementation design review
-- implementation
-- final review
-- machine-readable workflow state persistence
-- workflow artifact persistence under `.claude/workflow/`
-- optional human-facing docs or worklog persistence only after the main workflow has materially progressed
+하니스가 자동화할 수 있는 것:
+- feature 단위 `planning`
+- `reviewing`
+- `implementation_design`
+- `implementation_review`
+- `implementing`
+- `final_review`
+- `.claude/workflow/` 아래 workflow artifact 저장
+- `.claude/state/` 아래 machine-readable state 저장
+- main workflow가 충분히 진행된 뒤의 선택적 사람용 문서 저장
 
 ## Out of scope
 
-The harness must not autonomously do any of the following unless the user explicitly asks for it:
-- borrow patterns from sibling projects
-- infer architecture from neighboring repositories
-- expand the task into cross-feature or cross-package work
-- change shared contracts beyond the approved feature scope
-- treat human-facing docs as workflow authority
-- perform parallel lane orchestration
-- rewrite harness policy while also applying a feature workflow in the same run
+사용자가 명시적으로 요구하지 않는 한 아래는 자동으로 하지 않는다.
+- sibling repository에서 구현 패턴 차용
+- 인접 저장소 구조를 보고 architecture 추론
+- 작업을 cross-feature / cross-package 범위로 확장
+- 승인되지 않은 shared contract 변경
+- 사람용 문서를 workflow authority로 사용
+- 병렬 lane orchestration
+- 같은 run에서 harness policy 수정과 feature workflow 수행을 동시에 처리
 
-## Root discipline
+## Root 규칙
 
-The active project root is authoritative for project inspection.
+project inspection의 기준은 항상 `active project root`다.
 
-Allowed exception:
-- required harness policy docs may be resolved from the global fallback under `~/.claude/docs/` when the project-local copy is missing
+허용 예외:
+- 필수 policy 문서가 로컬에 없을 때만 `~/.claude/docs/` global fallback 사용
 
-Not allowed:
-- reading sibling repositories for implementation guidance
-- reading parent project source files as default context
-- importing toolchain assumptions from unrelated projects
+허용하지 않음:
+- sibling repository 탐색
+- parent project source를 기본 context로 사용
+- unrelated project에서 toolchain 가정 가져오기
 
-## Fresh-start rule
+## Fresh-start 규칙
 
-A fresh project may have none of the following:
+새 프로젝트에는 아래가 모두 없을 수 있다.
 - `.claude/state/`
 - `.claude/workflow/`
-- source files
+- source file
 - package manifest
-- config files
+- config file
 
-This is normal.
-Fresh-start is not a blocker.
+이 자체는 blocker가 아니다. 첫 persistence가 필요할 때 생성하면 된다.
 
-## Human gate rule
+## Human gate 규칙
 
-The harness must stop and require explicit human input when:
-- feature scope is ambiguous
-- the active project root is ambiguous
-- a required policy document is missing
-- a required prior approval is stale
-- the requested change would expand or replace a shared contract not already approved
-- the workflow would need to choose between materially different designs that are not equivalent in user impact
+아래 상황에서는 자동 진행하지 않고 사람 입력을 요구한다.
+- feature scope가 애매함
+- active project root가 애매함
+- 필수 policy 문서가 없음
+- 필요한 이전 승인이 stale 상태임
+- 승인되지 않은 shared contract 교체/확장이 필요함
+- 사용자 영향이 다른 복수 설계안 중 하나를 선택해야 함
 
-## Persistence rule
+## Persistence 규칙
 
-Main workflow persistence uses:
+main workflow의 authoritative persistence는 아래 두 곳이다.
 - `.claude/workflow/<feature-slug>/...`
 - `.claude/state/<feature-slug>.json`
 
-Human-facing docs are optional and separate.
+사람용 문서는 선택 사항이며 authority가 아니다.
 
-## Validation rule
+## Validation 규칙
 
-When an implementation stage claims validation was run, it must report the exact commands and outcomes.
-Do not claim validation that was not actually run.
+구현 단계가 validation 실행을 주장한다면, 정확한 command와 결과를 함께 남겨야 한다. 실행하지 않은 validation을 성공으로 적지 않는다.
 
-## Summary
+## 요약
 
-The harness is allowed to automate one scoped feature at a time.
-It must prefer strict root discipline, structured control data, and explicit stops over convenient inference.
+이 하니스는 한 번에 하나의 feature만 다룬다. 편한 추론보다 엄격한 root 규칙, 구조화된 control data, 명확한 stop을 우선한다.

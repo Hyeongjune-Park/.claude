@@ -1,54 +1,37 @@
 ---
 name: reviewing
-description: Review a planning artifact for one feature using only the bound review inputs and return a grounded verdict before implementation design.
+description: bound review input만 사용해 `planning` artifact를 검토하고 `implementation_design` 전 verdict를 반환하는 skill.
 ---
 
 # Reviewing
 
-This skill is for plan review only.
+이 skill은 plan review 전용이다.
+`implementation_review`, `final_review`는 각각 전용 skill을 사용한다.
 
-Use dedicated skills for:
-- implementation design review
-- final review
+## 필수 입력
 
-## Required inputs from orchestration
+caller는 아래를 제공해야 한다.
+- `artifact_under_review`인 plan artifact
+- `read_ledger_ref`
+- `required_read_targets`
+- `allowed_direct_reads`
+- 고정된 `policy_resolution_ref`
 
-The caller must provide:
-- the plan artifact under review
-- the read-ledger reference
-- the required read targets
-- the allowed direct reads
-- the fixed policy-resolution reference
+입력을 임의로 확장하지 않는다.
 
-Do not expand these inputs on your own.
+## 규칙
 
-## Rules
+- plan artifact만 검토한다.
+- plan을 implementation 내용으로 다시 쓰지 않는다.
+- blocking issue와 non-blocking issue를 분리한다.
+- 근거 없는 주장 없이 review한다.
+- `allowed_direct_reads` 밖 직접 읽기를 주장하지 않는다.
+- 필수 read target이 빠졌다고 판단되면 본문과 metadata에 warning을 남긴다.
+- 현재 정책은 `warning` 모드이므로, read 관련 의심은 우선 `evidence_status: warning`으로 기록한다.
+- 사람용 본문은 한국어를 기본으로 쓴다.
 
-- review the planning artifact only
-- do not rewrite the plan into implementation content
-- separate blocking issues from non-blocking issues
-- use only grounded evidence
-- do not claim direct inspection outside the allowed direct reads
-- do not return approval if a required read target is missing
+## 필수 출력
 
-## Evidence slots
-
-Use these slots exactly:
-- `Artifact under review`
-- `Read ledger ref`
-- `Required read targets`
-- `Allowed direct reads`
-- `Direct reads used`
-- `Missing read targets`
-- `Evidence gate`
-- `Inspected directly`
-- `Provided by caller`
-- `Inferred`
-- `Unverified`
-
-## Required output
-
-Return:
 - review scope
 - artifact under review
 - read ledger ref
@@ -56,25 +39,33 @@ Return:
 - allowed direct reads
 - direct reads used
 - missing read targets
-- evidence gate
+- evidence status
+- evidence warnings
 - evidence summary
 - overall assessment
 - blocking issues
 - non-blocking issues
 - required revisions
 - verdict
-- one valid reviewing artifact metadata block
+- metadata JSON
+- 사람용 Markdown 본문
 
-Use `workflow_stage: reviewing`.
-Normal approved next step is `implementation_design`.
+정상 승인 시 `next_allowed: implementation_design`이다.
 
-## Control-block requirements
+## 반환 형식
 
-For this skill:
-- `artifact_under_review` must be the plan artifact
-- `read_ledger_ref` must be present
-- `direct_reads_used` must be a subset of `allowed_direct_reads`
-- `required_read_targets` must include the plan artifact
-- `missing_read_targets` must be empty for `approved`
-- `missing_read_targets` must be empty for `approved_with_revisions`
-- `evidence_gate` must be `failed` when a required target is missing or when direct reads exceed the allowed set
+반드시 아래 두 블록만 반환한다.
+
+````text
+[ARTIFACT_METADATA_JSON]
+```json
+{ ... }
+```
+[ARTIFACT_BODY_MD]
+```md
+# Review Plan
+...
+```
+````
+
+front matter를 붙이지 않는다.

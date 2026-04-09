@@ -1,42 +1,47 @@
 ---
 title: STATE_SCHEMA
-version: 2
+version: 4
 status: active
 ---
 
 # STATE_SCHEMA
 
-## Purpose
+## 목적
 
-This document defines the machine-readable workflow state used by the harness.
+이 문서는 하니스가 사용하는 machine-readable workflow state 형식을 정의한다.
 
-Canonical path:
+canonical path:
 - `.claude/state/<feature-slug>.json`
 
-Related workflow artifacts live under:
+관련 workflow run root:
 - `.claude/workflow/<feature-slug>/`
 
-## Directory behavior
+## 디렉터리 규칙
 
-On a fresh or empty project, these directories may not exist yet:
+새 프로젝트에서는 아래 디렉터리가 없을 수 있다.
 - `.claude/`
 - `.claude/state/`
 - `.claude/workflow/`
 
-This is not a blocker.
-Create them when first persistence is needed.
+이 자체는 blocker가 아니다. 첫 persistence 시점에 생성한다.
 
-## State authority
+workflow run 내부는 아래처럼 분리한다.
+- `artifacts/`
+- `contracts/`
+- `evidence/`
 
-Use this authority order:
-1. current state file
-2. latest valid workflow artifact metadata block
-3. persisted policy-resolution input
-4. persisted read-ledger input
-5. grounded project inspection
-6. prose
+## authority 순서
 
-## Required top-level fields
+state 판정 우선순위:
+1. 현재 state 파일
+2. 최신 유효 artifact sidecar metadata
+3. persisted `policy-resolution`
+4. persisted `read ledger`
+5. persisted `read trace`
+6. 직접 확인한 근거
+7. 자유 서술
+
+## 필수 top-level 필드
 
 - `schema_version`
 - `feature_slug`
@@ -52,6 +57,7 @@ Use this authority order:
 - `scope_fingerprint`
 - `stale`
 - `stale_reason`
+- `evidence_policy_mode`
 - `policy_resolution`
 - `artifacts`
 - `review_inputs`
@@ -60,14 +66,13 @@ Use this authority order:
 - `last_transition`
 - `updated_at`
 
-## Field constraints
+## 값 규칙
 
 ### `schema_version`
-Initial value:
-- `state@2`
+초기값: `state@4`
 
 ### `workflow_state`
-Allowed values:
+허용값:
 - `planning_pending`
 - `plan_ready_for_review`
 - `plan_approved`
@@ -81,7 +86,7 @@ Allowed values:
 - `human_gate_required`
 
 ### `last_completed_stage`
-Allowed values or `null`:
+허용값 또는 `null`:
 - `planning`
 - `reviewing`
 - `implementation_design`
@@ -91,22 +96,22 @@ Allowed values or `null`:
 - `worklog_update`
 
 ### `status`
-Allowed values:
+허용값:
 - `pending`
 - `completed`
 - `blocked`
 - `stale`
 
 ### `verdict`
-Allowed values:
+허용값:
 - `none`
 - `approved`
 - `approved_with_revisions`
 - `not_approved`
 
 ### `next_allowed`
-Array of step names.
-Allowed values:
+단일 단계명이다.
+허용값:
 - `planning`
 - `reviewing`
 - `implementation_design`
@@ -116,29 +121,21 @@ Allowed values:
 - `worklog_update`
 - `none`
 
+### `evidence_policy_mode`
+현재 기본값은 `warning`이다.
+read 정책 위반 의심은 우선 warning으로 기록한다.
+
 ### `policy_resolution`
-Required keys:
+필수 키:
 - `ref`
 - `required_docs`
 - `consistent`
 
-`required_docs` must include:
-- `HARNESS_SCOPE.md`
-- `HARNESS_PRINCIPLES.md`
-- `CONTROL_CONTRACT.md`
-- `WORKFLOW_STATE_MACHINE.md`
-- `STATE_SCHEMA.md`
-
-Each required doc entry must contain:
-- `resolved_from` (`project_local|global_fallback|missing`)
-- `resolved_path`
-- `local_exists`
-- `global_exists`
-
-If any required doc resolves to `missing`, `consistent` must be `false`.
+`ref`는 canonical path를 가리킨다.
+- `.claude/workflow/<feature-slug>/contracts/policy-resolution.json`
 
 ### `artifacts`
-Required keys:
+필수 키:
 - `plan`
 - `review_plan`
 - `implementation_design`
@@ -146,104 +143,97 @@ Required keys:
 - `implementation`
 - `review_final`
 
-Each value is either a relative path string or `null`.
+각 값은 `null` 또는 아래 키를 가진 객체다.
+- `body_ref`
+- `meta_ref`
+
+예시:
+```json
+{
+  "plan": {
+    "body_ref": ".claude/workflow/example/artifacts/plan.md",
+    "meta_ref": ".claude/workflow/example/artifacts/plan.meta.json"
+  }
+}
+```
 
 ### `review_inputs`
-Required keys:
+필수 키:
 - `reviewing`
 - `implementation_review`
 - `final_review`
 
-Each value is either `null` or an object with:
+값은 `null` 또는 아래 키를 가진 객체다.
 - `ref`
 - `artifact_under_review`
 - `required_read_targets`
 - `allowed_direct_reads`
 
-This stores the latest persisted read ledger for that review stage.
+각 `ref`는 아래 canonical path 중 하나다.
+- `.claude/workflow/<feature-slug>/contracts/read-ledger-reviewing.json`
+- `.claude/workflow/<feature-slug>/contracts/read-ledger-implementation-review.json`
+- `.claude/workflow/<feature-slug>/contracts/read-ledger-final-review.json`
 
 ### `last_review_evidence`
-Use `null` when no review has happened yet.
-
-Otherwise required keys:
+review가 아직 없으면 `null`.
+그 외에는 아래 키가 필요하다.
 - `stage`
 - `artifact_under_review`
 - `read_ledger_ref`
+- `read_trace_ref`
 - `required_read_targets`
 - `allowed_direct_reads`
-- `direct_reads_used`
+- `self_reported_direct_reads_used`
+- `observed_direct_reads_used`
 - `missing_read_targets`
-- `evidence_gate`
+- `evidence_status`
+- `warnings`
+
+`read_trace_ref`의 canonical path:
+- `.claude/workflow/<feature-slug>/evidence/read-trace-<stage>.json`
 
 ### `last_validation_summary`
-Use `null` when implementation validation has not happened yet.
-
-Otherwise required keys:
+구현 validation이 아직 없으면 `null`.
+그 외에는 아래 키가 필요하다.
+- `ref`
 - `commands_requested`
 - `commands_executed`
 - `result`
 - `evidence_refs`
 
+권장 canonical path:
+- `.claude/workflow/<feature-slug>/evidence/validation-summary.json`
+
 ### `last_transition`
-Required keys:
+필수 키:
 - `from_state`
 - `to_state`
 - `trigger`
 - `artifact_path`
 - `timestamp`
 
-## Fresh-start example
+## Fresh-start 예시
 
 ```json
 {
-  "schema_version": "state@2",
+  "schema_version": "state@4",
   "feature_slug": "example-feature",
   "active_project_root": "C:/path/to/project",
   "workflow_state": "planning_pending",
   "last_completed_stage": null,
   "status": "pending",
   "verdict": "none",
-  "next_allowed": ["planning"],
+  "next_allowed": "planning",
   "blocker_present": false,
   "blocker_reason": "",
   "human_input_required": false,
   "scope_fingerprint": null,
   "stale": false,
   "stale_reason": "",
+  "evidence_policy_mode": "warning",
   "policy_resolution": {
     "ref": null,
-    "required_docs": {
-      "HARNESS_SCOPE.md": {
-        "resolved_from": "missing",
-        "resolved_path": null,
-        "local_exists": false,
-        "global_exists": false
-      },
-      "HARNESS_PRINCIPLES.md": {
-        "resolved_from": "missing",
-        "resolved_path": null,
-        "local_exists": false,
-        "global_exists": false
-      },
-      "CONTROL_CONTRACT.md": {
-        "resolved_from": "missing",
-        "resolved_path": null,
-        "local_exists": false,
-        "global_exists": false
-      },
-      "WORKFLOW_STATE_MACHINE.md": {
-        "resolved_from": "missing",
-        "resolved_path": null,
-        "local_exists": false,
-        "global_exists": false
-      },
-      "STATE_SCHEMA.md": {
-        "resolved_from": "missing",
-        "resolved_path": null,
-        "local_exists": false,
-        "global_exists": false
-      }
-    },
+    "required_docs": {},
     "consistent": false
   },
   "artifacts": {
@@ -266,53 +256,25 @@ Required keys:
     "to_state": "planning_pending",
     "trigger": "state_initialized",
     "artifact_path": null,
-    "timestamp": "2026-01-01T00:00:00Z"
+    "timestamp": "2026-04-09T00:00:00Z"
   },
-  "updated_at": "2026-01-01T00:00:00Z"
+  "updated_at": "2026-04-09T00:00:00Z"
 }
 ```
 
-## Update rule
+## 갱신 규칙
 
-After each completed stage:
-1. persist policy-resolution input
-2. if the next stage is a review stage, persist its read-ledger input
-3. save the workflow artifact
-4. extract the artifact metadata block
-5. normalize the resulting workflow state
-6. update the state file
-7. only then re-run controller state determination
+각 전이 완료 후 순서는 아래와 같다.
+1. `policy-resolution` 저장
+2. 다음 단계가 review라면 해당 `read ledger` 저장
+3. workflow artifact 저장
+4. artifact metadata block 추출 및 검증
+5. 현재 artifact를 기준으로 `workflow_state`, `last_completed_stage`, `next_allowed`, `scope_fingerprint`를 정규화
+6. 현재 stage에 대응하는 `artifacts.*` 항목을 artifact 경로로 갱신
+7. `last_transition`과 `updated_at` 갱신
+8. state 파일 저장
+9. 갱신된 state를 기준으로 `controller` 재판정
 
-## Review-state update rule
-
-When the current artifact is a review artifact:
-- copy `artifact_under_review`
-- copy `read_ledger_ref`
-- copy `required_read_targets`
-- copy `allowed_direct_reads`
-- copy `direct_reads_used`
-- copy `missing_read_targets`
-- copy `evidence_gate`
-
-If `direct_reads_used` exceeds `allowed_direct_reads`, the review is invalid.
-If `missing_read_targets` is non-empty, the review is non-advancing.
-
-## Validation-state update rule
-
-When the current artifact is an implementation artifact:
-- copy requested validation commands
-- copy executed validation commands
-- copy exact result
-- copy evidence refs for later final review
-
-## Summary
-
-The canonical workflow artifact metadata format is YAML front-matter at the top of each artifact.
-The state file is the machine-readable current truth for one feature workflow.
-
-It must capture:
-- position
-- policy-resolution input
-- review-stage read inputs
-- review evidence
-- validation evidence
+artifact가 저장되었는데 `artifacts.*`가 여전히 `null`이면 state 갱신 실패다.
+artifact가 저장되었는데 `workflow_state`가 이전 pending 값에 남아 있으면 전이 실패다.
+state 저장 후 `controller` 재판정이 없으면 그 전이는 아직 완료가 아니다.

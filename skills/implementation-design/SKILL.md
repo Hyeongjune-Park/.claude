@@ -1,34 +1,52 @@
 ---
 name: implementation-design
-description: Produce a file-level implementation design from an approved plan without dumping full source files as implementation.
+description: 승인된 plan을 구현 가능한 설계로 바꾸되 실제 코드 덤프 없이 파일·계약·검증 단위로 정리하는 skill.
 ---
 
 # Implementation Design
 
-Use this skill to turn an approved plan into an implementation-ready design.
+`implementation-design`은 승인된 plan을 구현 직전 설계로 바꾼다.
 
-## Rules
+## 규칙
 
-- require an approved plan review or equivalent approved plan artifact
-- stay within the approved scope
-- do not implement code
-- do not dump full file bodies except tiny illustrative snippets when necessary
-- design at file level, contract level, validation level, and execution-order level
+- 승인된 plan review 또는 동등한 승인 artifact가 있어야 한다.
+- 승인된 scope 안에 머문다.
+- 코드를 구현하지 않는다.
+- 필요할 때의 작은 예시 외에는 전체 파일 본문을 덤프하지 않는다.
+- 파일 수준, contract 수준, validation 수준, 실행 순서를 설계한다.
+- 사람용 본문은 한국어를 기본으로 쓴다.
 
-## Required output
+## 필수 출력
 
-Return an implementation design that includes:
 - goal
 - in scope / out of scope
 - affected files
-- per-file responsibilities
-- request/response and validation details
+- file별 책임
+- request/response와 validation 세부사항
 - execution order
 - validation plan
-- risks or open questions
-- one valid implementation_design artifact metadata block
+- risks 또는 open questions
+- metadata JSON
+- 사람용 Markdown 본문
 
-## Non-goal
+## 반환 형식
 
-This is not a code generation artifact.
-If the output reads like a full source tree ready to paste, it is too detailed.
+반드시 아래 두 블록만 반환한다.
+
+````text
+[ARTIFACT_METADATA_JSON]
+```json
+{ ... }
+```
+[ARTIFACT_BODY_MD]
+```md
+# Implementation Design
+...
+```
+````
+
+front matter를 붙이지 않는다.
+
+## 비목표
+
+이 산출물은 code generation용 전체 소스가 아니다. 붙여넣기용 전체 파일 트리처럼 보이면 지나치게 상세한 것이다.

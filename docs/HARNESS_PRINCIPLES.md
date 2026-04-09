@@ -1,150 +1,164 @@
 ---
 title: HARNESS_PRINCIPLES
-version: 3
+version: 5
 status: active
 ---
 
 # HARNESS_PRINCIPLES
 
-## Purpose
+## 목적
 
-These are the operating principles that all harness docs, agents, and skills must follow.
+모든 하니스 문서, agent, skill이 따라야 하는 공통 운영 원칙이다.
 
-## Principle 1. Separate control from production
+## 1. control과 production을 분리한다
 
-Control decides:
-- current workflow state
-- next legal step
-- continue vs stop
+control이 결정하는 것:
+- 현재 workflow state
+- 다음 합법 단계
+- continue / stop
+- warning 기록 방식
+- evidence status 판정
 
-Production creates:
-- plans
-- reviews
-- implementation designs
-- code changes
-- validation reports
+production이 만드는 것:
+- plan
+- review
+- implementation design
+- code change
+- validation report
 
-A controller must not produce specialist work.
-A specialist must not replace workflow control.
+`controller`가 specialist work를 대신 만들면 안 되고, specialist가 workflow control을 대신 판단해도 안 된다.
 
-## Principle 2. Prefer structured control data over prose
+## 2. 자유 서술보다 구조화된 데이터가 우선이다
 
-Workflow decisions must prefer:
+workflow 판정 우선순위:
 1. `.claude/state/<feature-slug>.json`
-2. valid workflow artifact metadata blocks
-3. persisted policy-resolution input
-4. persisted read-ledger input
-5. workflow-state-machine rules
-6. grounded inspection
-7. freeform prose
+2. 유효한 artifact sidecar metadata (`artifacts/*.meta.json`)
+3. persisted `policy-resolution`
+4. persisted `read ledger`
+5. persisted `read trace`
+6. `WORKFLOW_STATE_MACHINE.md`
+7. 직접 확인한 근거
+8. 자유 서술
 
-## Principle 3. Machine-readable state is authoritative
+## 3. machine-readable state가 authority다
 
-The main workflow authority is not human-facing documentation.
-Human-facing docs are optional persistence only.
+사람용 문서는 main workflow authority가 아니다. 사람용 문서는 저장용 산출물이다.
+workflow 판정은 state와 artifact sidecar metadata를 우선한다.
 
-## Principle 4. One legal step at a time
+## 4. 한 번에 한 단계만 전진한다
 
-The harness advances in single legal transitions.
-It must not pre-schedule the entire workflow in a single decision.
+workflow는 항상 단일 합법 전이만 수행한다. 한 번의 판단으로 전체 workflow를 예약하지 않는다.
 
-## Principle 5. Persist fixed inputs before specialist work
+한 번의 합법 전이는 아래를 포함한다.
+- specialist 1회 호출
+- artifact body 저장
+- artifact sidecar metadata 저장
+- 필요 contract 저장
+- state 갱신
+- review 단계면 read trace 기록
+- controller 재판정
 
-Before a specialist stage runs, the orchestration layer must persist the fixed inputs that stage is allowed to rely on.
+## 5. specialist 실행 전에 고정 입력을 먼저 저장한다
 
-These include:
-- normalized policy resolution
-- review-stage read ledgers
-- current authoritative state context
+specialist 실행 전에 orchestration layer는 아래 입력을 먼저 고정한다.
+- 정규화된 `policy-resolution`
+- review 단계용 `read ledger`
+- 현재 authoritative state context
 
-Do not allow specialists to re-resolve policy docs or invent direct reads.
+specialist가 policy를 다시 찾거나 직접 읽기 범위를 임의로 늘리게 두지 않는다.
 
-## Principle 6. Strict root discipline
+## 6. root discipline을 지킨다
 
-For feature work, inspect only the active project root.
-Do not borrow implementation patterns, toolchain assumptions, or source structure from sibling projects.
+feature 작업은 `active project root` 안에서만 본다. sibling project의 구현 패턴, toolchain, source 구조를 가져오지 않는다.
 
-Allowed exception:
-- global fallback resolution for required policy docs only
+허용 예외는 필수 policy 문서의 global fallback뿐이다.
 
-## Principle 7. Evidence discipline is enforced by input binding
+## 7. evidence discipline은 bound input과 observed trace를 함께 본다
 
-A stage may only claim direct inspection for files it actually read.
+stage는 실제로 읽은 파일만 직접 근거로 주장할 수 있다.
 
-For review stages, the orchestration layer must bind:
-- the artifact under review
-- the required read targets
-- the allowed direct reads
+review 단계에서 orchestration layer는 최소한 아래를 묶어 준다.
+- `artifact_under_review`
+- `required_read_targets`
+- `allowed_direct_reads`
 
-The reviewer must not expand direct inspection beyond the allowed direct reads.
+reviewer는 이 범위를 넘겨 직접 읽기를 주장하면 안 된다.
 
-Anything not directly inspected must be labeled as:
-- provided
-- inferred
-- unverified
+직접 확인하지 않은 내용은 아래 중 하나로 표시한다.
+- `Provided by caller`
+- `Inferred`
+- `Unverified`
 
-Do not approve based on invented reads.
+현재 read 정책은 `warning` 모드다.
+- self-report는 유지한다.
+- orchestration layer는 가능하면 observed `read trace`도 남긴다.
+- self-report와 observed trace가 어긋나면 warning으로 기록한다.
+- warning만으로는 자동 차단하지 않는다.
 
-## Principle 8. Policy resolution must be single-source and fixed
+## 8. policy resolution은 단일 출처여야 한다
 
-For each required policy doc, the harness must produce exactly one resolved outcome:
+필수 policy 문서마다 결과는 정확히 하나다.
 - `project_local`
 - `global_fallback`
 - `missing`
 
-If a local copy exists, it is authoritative.
-Do not treat local and global copies as co-equal sources for the same required doc.
+로컬 사본이 있으면 그것이 우선이다. 같은 문서에 대해 local과 global을 동등한 authority로 취급하지 않는다.
 
-Once resolved for a run, policy resolution is fixed input.
-Specialist stages must not reinterpret it.
+## 9. review는 slot-based 형식을 유지한다
 
-## Principle 9. Review stages are slot-based, not freeform evidence claims
+review artifact metadata는 최소한 아래 항목을 가진다.
+- `artifact_under_review`
+- `read_ledger_ref`
+- `required_read_targets`
+- `allowed_direct_reads`
+- `direct_reads_used`
+- `missing_read_targets`
+- `evidence_policy_mode`
+- `evidence_status`
+- `evidence_warnings`
+- `verdict`
 
-Review artifacts must explicitly include:
-- artifact under review
-- read ledger reference
-- required read targets
-- allowed direct reads
-- direct reads used
-- missing read targets
-- evidence gate result
-- verdict
+사람용 review 본문도 위와 같은 정보를 명시적으로 요약해야 한다.
 
-A review artifact that claims direct inspection beyond its read ledger is invalid.
+## 10. false continuation보다 stop을 우선하되, warning 모드는 과잉 차단하지 않는다
 
-## Principle 10. Stop over false continuation
+아래 상황에서는 멈춘다.
+- 필수 policy 문서 누락
+- inconsistent policy resolution
+- 필수 artifact 누락
+- 필수 `read ledger` 누락
+- state와 artifact 충돌
+- stale approval
+- human input 필요
+- 다음 합법 단계를 안전하게 고를 수 없음
+- specialist가 명시적으로 `status: blocked`
+- `evidence_status: failed`
 
-Stop when:
-- required policy docs are missing
-- policy resolution is inconsistent
-- required artifacts are missing
-- required read ledgers are missing
-- state and artifact disagree
-- approval is stale
-- human input is required
-- the next legal step cannot be determined safely
-- a review artifact exceeds its bound direct-read set
-- a review artifact has non-empty missing read targets
-- a review artifact claims approval with failed evidence gate
+아래 상황은 현재 warning으로 기록한다.
+- review artifact가 허용된 직접 읽기 범위를 넘긴 것으로 보고됨
+- `missing_read_targets`가 비어 있지 않음
+- self-report와 observed trace 불일치
 
-## Principle 11. Keep specialist stages narrow
+warning은 evidence와 state에 남기되, 현재 단계에서는 자동 차단 사유로 바로 승격하지 않는다.
 
-Planning should not implement.
-Implementation design should not dump full file contents as if it were implementation.
-Review stages should not rewrite the work they are reviewing.
-Implementation should not broaden scope.
+## 11. specialist stage는 좁게 유지한다
 
-## Principle 12. Keep shared rules centralized
+- `planning`은 구현하지 않는다.
+- `implementation_design`은 전체 소스 덤프가 아니다.
+- review 단계는 검토 대상 산출물을 다시 쓰지 않는다.
+- `implementing`은 scope를 넓히지 않는다.
 
-Shared workflow rules belong in the shared docs.
-Skills and agents should reference them, not re-specify entire policy stacks unless necessary for safe behavior.
+## 12. 공통 규칙은 공통 문서에 둔다
 
-## Summary
+공유 규칙은 shared docs에 둔다. skill과 agent는 필요한 범위만 요약하고, 같은 정책을 여러 파일에 길게 중복하지 않는다.
 
-The harness should be:
+## 요약
+
+하니스는 아래 성질을 유지해야 한다.
 - state-authoritative
 - root-disciplined
-- evidence-bound
+- evidence-aware
+- warning-tolerant
 - policy-consistent
 - stoppable
 - role-separated

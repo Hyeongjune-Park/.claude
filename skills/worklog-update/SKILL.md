@@ -1,23 +1,22 @@
 ---
 name: worklog-update
-description: Write or update a human-facing worklog entry based on completed workflow artifacts. Optional persistence only.
+description: 완료된 workflow artifact를 바탕으로 사람용 worklog를 작성하거나 갱신하는 선택적 persistence skill.
 ---
 
 # Worklog Update
 
-This skill writes human-facing worklog entries.
+이 skill은 사람용 worklog entry를 작성한다.
 
-## Rules
+## 규칙
 
-- use completed workflow artifacts as source
-- do not write machine-readable state
-- do not replace workflow artifacts
-- do not advance the main workflow by itself
-- keep entries factual and feature-scoped
+- 완료된 workflow artifact를 source로 사용한다.
+- machine-readable state를 쓰지 않는다.
+- workflow artifact를 대체하지 않는다.
+- main workflow를 스스로 전진시키지 않는다.
+- entry는 factual하고 feature-scoped하게 유지한다.
 
-## Required output
+## 필수 출력
 
-Return:
 - active feature
 - source artifacts used
 - worklog path written

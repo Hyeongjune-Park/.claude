@@ -1,42 +1,94 @@
 ---
 title: CONTROL_CONTRACT
-version: 3
+version: 5
 status: active
 ---
 
 # CONTROL_CONTRACT
 
-## Purpose
+## 목적
 
-This document defines the required YAML artifact metadata block used by workflow artifacts.
+이 문서는 workflow artifact가 공통으로 따라야 하는 기계용 metadata 형식과 저장 위치를 정의한다.
 
-Every specialist-stage artifact that advances or blocks the workflow must begin with exactly one YAML front-matter metadata block.
+사람이 읽는 artifact 본문은 `.md`로 저장한다.
+기계가 읽는 메타데이터는 같은 artifact 이름의 `.meta.json`으로 저장한다.
+YAML front matter를 사람용 `.md` 앞에 붙이지 않는다.
 
-## Required shape
+## 저장 구조
 
-```yaml
----
-workflow_stage: <stage>
-feature_slug: <feature-slug>
-artifact_type: <artifact-type>
-status: <status>
-artifact_under_review: <path-or-null>
-read_ledger_ref: <path-or-null>
-required_read_targets:
-  - <path-or-target-name>
-direct_reads_used:
-  - <path-or-target-name>
-missing_read_targets:
-  - <path-or-target-name>
-evidence_gate: <not_applicable|passed|failed>
-verdict: <none|approved|approved_with_revisions|not_approved>
----
+canonical root:
+- `.claude/workflow/<feature-slug>/`
+
+하위 디렉터리:
+- `artifacts/` → 사람이 읽는 `.md`
+- `contracts/` → `policy-resolution`, `read-ledger`
+- `evidence/` → `validation-summary`, `read-trace`, warning 기록
+
+artifact별 저장 쌍:
+- `artifacts/plan.md` + `artifacts/plan.meta.json`
+- `artifacts/review-plan.md` + `artifacts/review-plan.meta.json`
+- `artifacts/implementation-design.md` + `artifacts/implementation-design.meta.json`
+- `artifacts/review-implementation.md` + `artifacts/review-implementation.meta.json`
+- `artifacts/implementation.md` + `artifacts/implementation.meta.json`
+- `artifacts/review-final.md` + `artifacts/review-final.meta.json`
+
+## specialist 반환 형식
+
+specialist stage는 저장용 파일을 직접 쓰는 것이 아니라 아래 두 블록을 반환한다.
+추가 설명 문장은 넣지 않는다.
+
+1. `ARTIFACT_METADATA_JSON`
+2. `ARTIFACT_BODY_MD`
+
+예시:
+
+````text
+[ARTIFACT_METADATA_JSON]
+```json
+{ ... }
+```
+[ARTIFACT_BODY_MD]
+```md
+# 제목
+...
+```
+````
+
+orchestration layer는 첫 블록을 `.meta.json`에, 두 번째 블록을 `.md`에 저장한다.
+
+## artifact metadata 공통 형식
+
+```json
+{
+  "workflow_stage": "<planning|reviewing|implementation_design|implementation_review|implementing|final_review|worklog_update>",
+  "feature_slug": "<feature-slug>",
+  "artifact_type": "<plan|review_plan|implementation_design|review_implementation|implementation|review_final|worklog>",
+  "scope_fingerprint": "<string-or-null>",
+  "status": "<completed|incomplete|blocked>",
+  "verdict": "<none|approved|approved_with_revisions|not_approved>",
+  "next_allowed": "<planning|reviewing|implementation_design|implementation_review|implementing|final_review|worklog_update|none>",
+  "blocker_present": true,
+  "blocker_reason": "<string>",
+  "human_input_required": false,
+  "stale_conditions": ["<condition>"],
+  "active_project_root": "<path>",
+  "policy_resolution_ref": "<path-or-null>",
+  "artifact_under_review": "<path-or-null>",
+  "read_ledger_ref": "<path-or-null>",
+  "required_read_targets": ["<path-or-target>"],
+  "allowed_direct_reads": ["<path-or-target>"],
+  "direct_reads_used": ["<path-or-target>"],
+  "missing_read_targets": ["<path-or-target>"],
+  "evidence_policy_mode": "warning",
+  "evidence_status": "<not_applicable|passed|warning|failed>",
+  "evidence_warnings": ["<warning-code-or-message>"]
+}
 ```
 
-## Field rules
+## 필드 규칙
 
 ### `workflow_stage`
-Allowed values:
+허용값:
 - `planning`
 - `reviewing`
 - `implementation_design`
@@ -45,30 +97,39 @@ Allowed values:
 - `final_review`
 - `worklog_update`
 
+### `artifact_type`
+허용값:
+- `plan`
+- `review_plan`
+- `implementation_design`
+- `review_implementation`
+- `implementation`
+- `review_final`
+- `worklog`
+
 ### `feature_slug`
-Must match the active feature for the run.
+현재 run의 active feature와 일치해야 한다.
 
 ### `scope_fingerprint`
-A stable identifier for the approved feature scope.
-It must not change casually between stages.
+승인된 feature scope를 식별하는 안정적 값이다. stage 사이에서 가볍게 바꾸지 않는다.
 
 ### `status`
-Allowed values:
+허용값:
 - `completed`
 - `incomplete`
 - `blocked`
 
 ### `verdict`
-Allowed values:
+허용값:
 - `none`
 - `approved`
 - `approved_with_revisions`
 - `not_approved`
 
-Use `verdict: none` for non-review production stages.
+review가 아닌 생산 단계는 `verdict: none`을 사용한다.
 
 ### `next_allowed`
-Allowed step names:
+허용값:
 - `planning`
 - `reviewing`
 - `implementation_design`
@@ -78,191 +139,107 @@ Allowed step names:
 - `worklog_update`
 - `none`
 
-Use exactly the next legal workflow step, or `none` when terminal or blocked.
+단일 단계명만 적는다. blocked 또는 terminal이면 `none`이다.
 
-### `blocker_present`
-Boolean.
-Must be consistent with `status` and `blocker_reason`.
-
-### `blocker_reason`
-Required string field.
-Use empty string only when no blocker exists.
-
-### `human_input_required`
-Boolean.
-When true, the workflow must stop.
-
-### `stale_conditions`
-Array of conditions that would invalidate the current approval or output.
-
-### `active_project_root`
-Must match the active project root used for the stage.
-
-### `policy_resolution_ref`
-Path to the persisted policy-resolution input used for this artifact.
-
-Required for all workflow stages except fresh-start planning that has no persistence yet.
-Once persistence exists, do not omit it.
-
-### `artifact_under_review`
-Required for review stages.
-Use `null` for non-review stages.
-
-### `read_ledger_ref`
-Required for review stages.
-Use `null` for non-review stages.
+### `artifact_under_review`, `read_ledger_ref`
+- review 단계에서는 둘 다 필수다.
+- review가 아닌 단계에서는 `null`이다.
 
 ### `required_read_targets`
-The minimum targets that had to be read for the artifact to make its claims safely.
-
-Examples:
-- the artifact under review
-- validation evidence referenced by final review
-- any source file claimed as directly inspected
+해당 artifact가 안전하게 주장하려면 반드시 읽어야 했던 대상 목록이다.
 
 ### `allowed_direct_reads`
-The direct-read set authorized by the orchestration layer for this stage.
-
-For review stages, all `direct_reads_used` must be a subset of this list.
+orchestration layer가 허용한 직접 읽기 집합이다.
 
 ### `direct_reads_used`
-The files or targets the stage actually used as direct inspection.
-
-For review stages:
-- do not list anything outside `allowed_direct_reads`
-- do not omit a directly inspected target from this field
+specialist가 자기보고한 직접 읽기 목록이다.
+현재는 authoritative trace가 아니라 self-report다.
+이 값은 이후 `read-trace`와 비교할 수 있다.
 
 ### `missing_read_targets`
-Targets that should have been read but were not.
+specialist가 인지한 필수 읽기 누락 목록이다.
+warning 모드에서는 이 값이 비어 있지 않아도 자동 차단 사유로 바로 승격하지 않는다.
+다만 reviewer는 본문에서 불충분한 근거를 명시해야 한다.
 
-If this field is non-empty, then:
-- `evidence_gate` must be `failed`
-- `verdict` must not be `approved`
-- `verdict` must not be `approved_with_revisions`
+### `evidence_policy_mode`
+현재 기본값은 `warning`이다.
+read 정책 위반 의심은 우선 warning으로 기록하고, 곧바로 workflow를 차단하지 않는다.
 
-### `evidence_gate`
-Allowed values:
+### `evidence_status`
+허용값:
 - `not_applicable`
 - `passed`
+- `warning`
 - `failed`
 
-Use:
-- `not_applicable` for non-review stages
-- `passed` only when all are true:
-  - `read_ledger_ref` exists
-  - `artifact_under_review` exists
-  - `missing_read_targets` is empty
-  - `direct_reads_used` is a subset of `allowed_direct_reads`
-- `failed` otherwise
+사용 규칙:
+- non-review stage는 `not_applicable`
+- review stage에서 read 관련 경고가 있으면 `warning`
+- 입력이 너무 부족해 review 자체가 성립하지 않으면 `failed`
 
-## Stage-specific expectations
+### `evidence_warnings`
+warning 모드에서 기록하는 코드 또는 문장 목록이다.
+예시:
+- `required_read_target_missing_reported`
+- `direct_read_out_of_allowlist_reported`
+- `self_report_observed_trace_mismatch`
 
-### planning
+## Stage별 최소 기대값
+
+### `planning`
 - `verdict: none`
-- normal success `next_allowed: [reviewing]`
+- 정상 완료 시 `next_allowed: reviewing`
 - `artifact_under_review: null`
 - `read_ledger_ref: null`
-- `evidence_gate: not_applicable`
+- `evidence_status: not_applicable`
 
-### reviewing
-This stage is for plan review only.
-- `verdict` must be one of `approved`, `approved_with_revisions`, `not_approved`
-- normal success `next_allowed: [implementation_design]`
-- `artifact_under_review` must be the planning artifact path
-- `read_ledger_ref` must be present
-- `required_read_targets` must include the plan artifact
-- `approved` and `approved_with_revisions` require:
-  - `evidence_gate: passed`
-  - `missing_read_targets: []`
-  - `direct_reads_used` subset of `allowed_direct_reads`
+### `reviewing`
+- `verdict`는 `approved`, `approved_with_revisions`, `not_approved` 중 하나
+- 정상 승인 시 `next_allowed: implementation_design`
+- `artifact_under_review`는 plan artifact 경로
+- `required_read_targets`에는 plan artifact가 포함되어야 함
+- read 관련 warning이 있으면 `evidence_status: warning`으로 기록 가능
 
-### implementation_design
+### `implementation_design`
 - `verdict: none`
-- normal success `next_allowed: [implementation_review]`
-- `artifact_under_review: null`
-- `read_ledger_ref: null`
-- `evidence_gate: not_applicable`
+- 정상 완료 시 `next_allowed: implementation_review`
+- review 관련 필드는 `null`
+- `evidence_status: not_applicable`
 
-### implementation_review
-- `verdict` must be one of `approved`, `approved_with_revisions`, `not_approved`
-- normal success `next_allowed: [implementing]`
-- `artifact_under_review` must be the implementation-design artifact path
-- `read_ledger_ref` must be present
-- `required_read_targets` must include the implementation-design artifact
-- `approved` and `approved_with_revisions` require:
-  - `evidence_gate: passed`
-  - `missing_read_targets: []`
-  - `direct_reads_used` subset of `allowed_direct_reads`
+### `implementation_review`
+- `verdict`는 `approved`, `approved_with_revisions`, `not_approved` 중 하나
+- 정상 승인 시 `next_allowed: implementing`
+- `artifact_under_review`는 implementation-design artifact 경로
+- `required_read_targets`에는 implementation-design artifact가 포함되어야 함
+- read 관련 warning이 있으면 `evidence_status: warning`으로 기록 가능
 
-### implementing
+### `implementing`
 - `verdict: none`
-- normal success `next_allowed: [final_review]`
-- `artifact_under_review: null`
-- `read_ledger_ref: null`
-- `evidence_gate: not_applicable`
+- 정상 완료 시 `next_allowed: final_review`
+- review 관련 필드는 `null`
+- `evidence_status: not_applicable`
 
-### final_review
-- `verdict` must be one of `approved`, `approved_with_revisions`, `not_approved`
-- normal success `next_allowed: [none]`
-- `artifact_under_review` must be the implementation artifact path
-- `read_ledger_ref` must be present
-- `required_read_targets` must include:
-  - the implementation artifact
-  - the recorded validation evidence referenced by final review
-  - every source file claimed as directly inspected
-- `approved` and `approved_with_revisions` require:
-  - `evidence_gate: passed`
-  - `missing_read_targets: []`
-  - `direct_reads_used` subset of `allowed_direct_reads`
+### `final_review`
+- `verdict`는 `approved`, `approved_with_revisions`, `not_approved` 중 하나
+- 정상 승인 시 `next_allowed: none`
+- `artifact_under_review`는 implementation artifact 경로
+- `required_read_targets`에는 implementation artifact와 validation evidence가 포함되어야 함
+- read 관련 warning이 있으면 `evidence_status: warning`으로 기록 가능
 
-### worklog_update
+### `worklog_update`
 - `verdict: none`
-- does not advance the main workflow by itself
-- `artifact_under_review: null`
-- `read_ledger_ref: null`
-- `evidence_gate: not_applicable`
+- main workflow를 전진시키지 않음
+- `next_allowed: none`
+- review 관련 필드는 `null`
+- `evidence_status: not_applicable`
 
-## Artifact-body requirement
+## 사람용 artifact 본문 규칙
 
-Review artifacts must contain a human-readable slot-based evidence section that matches the artifact metadata block.
+사람용 `.md` 본문은 한국어를 기본으로 쓴다.
+아래 용어만 그대로 유지한다.
+- status / verdict 값
+- stage 이름
+- skill / agent 이름
+- path / key / field 이름
 
-Required slots:
-- artifact under review
-- read ledger ref
-- required read targets
-- allowed direct reads
-- direct reads used
-- missing read targets
-- evidence gate
-- verdict
-
-## Artifact mapping
-
-Use these canonical workflow artifact paths:
-- planning → `.claude/workflow/<feature-slug>/plan.md`
-- reviewing → `.claude/workflow/<feature-slug>/review-plan.md`
-- implementation_design → `.claude/workflow/<feature-slug>/implementation-design.md`
-- implementation_review → `.claude/workflow/<feature-slug>/review-implementation.md`
-- implementing → `.claude/workflow/<feature-slug>/implementation.md`
-- final_review → `.claude/workflow/<feature-slug>/review-final.md`
-
-## Consistency rule
-
-A artifact metadata block must be internally consistent.
-
-Examples of invalid combinations:
-- `status: completed` with `blocker_present: true`
-- `workflow_stage: implementing` with `next_allowed: [reviewing]`
-- `workflow_stage: final_review` with `verdict: none`
-- `missing_read_targets` non-empty with `evidence_gate: passed`
-- `evidence_gate: failed` with `verdict: approved`
-- `direct_reads_used` containing paths not present in `allowed_direct_reads`
-- review stage with `read_ledger_ref: null`
-- review stage with `artifact_under_review: null`
-
-## Summary
-
-The artifact metadata block is the structured handoff between workflow stages.
-
-For review stages, it is not enough to state a verdict.
-The artifact must show that the review stayed within its bound inputs.
+artifact 본문은 기계용 front matter 없이 바로 제목과 본문으로 시작한다.

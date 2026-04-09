@@ -1,50 +1,36 @@
 ---
 name: implementation-review
-description: Critically review an implementation design using only the bound review inputs and return a grounded verdict before coding.
+description: bound review input만 사용해 `implementation_design`을 비판적으로 검토하고 코딩 전 verdict를 반환하는 skill.
 ---
 
 # Implementation Review
 
-Review the implementation design only.
+이 skill은 `implementation_design`만 검토한다.
 
-## Required inputs from orchestration
+## 필수 입력
 
-The caller must provide:
-- the implementation-design artifact under review
-- the read-ledger reference
-- the required read targets
-- the allowed direct reads
-- the fixed policy-resolution reference
+caller는 아래를 제공해야 한다.
+- `artifact_under_review`인 implementation-design artifact
+- `read_ledger_ref`
+- `required_read_targets`
+- `allowed_direct_reads`
+- 고정된 `policy_resolution_ref`
 
-Do not expand these inputs on your own.
+입력을 임의로 확장하지 않는다.
 
-## Rules
+## 규칙
 
-- review the design, not imagined future code
-- check scope fit, missing files, validation gaps, response-shape clarity, and risk
-- separate blocking issues from non-blocking improvements
-- do not rewrite the design into implementation
-- do not claim direct inspection outside the allowed direct reads
-- do not return approval if a required read target is missing
+- 상상 속 미래 코드가 아니라 현재 design을 검토한다.
+- scope 적합성, 빠진 파일, validation 공백, 응답 shape 명확성, 위험 요소를 본다.
+- blocking issue와 non-blocking issue를 분리한다.
+- design을 implementation으로 다시 쓰지 않는다.
+- `allowed_direct_reads` 밖 직접 읽기를 주장하지 않는다.
+- 필수 read target이 빠졌다고 판단되면 warning을 남긴다.
+- 현재 정책은 `warning` 모드이므로, read 관련 의심은 우선 `evidence_status: warning`으로 기록한다.
+- 사람용 본문은 한국어를 기본으로 쓴다.
 
-## Evidence slots
+## 필수 출력
 
-Use these slots exactly:
-- `Artifact under review`
-- `Read ledger ref`
-- `Required read targets`
-- `Allowed direct reads`
-- `Direct reads used`
-- `Missing read targets`
-- `Evidence gate`
-- `Inspected directly`
-- `Provided by caller`
-- `Inferred`
-- `Unverified`
-
-## Required output
-
-Return:
 - review scope
 - artifact under review
 - read ledger ref
@@ -52,24 +38,33 @@ Return:
 - allowed direct reads
 - direct reads used
 - missing read targets
-- evidence gate
+- evidence status
+- evidence warnings
 - evidence summary
 - overall assessment
 - blocking issues
 - non-blocking issues
 - required revisions
 - verdict
-- one valid implementation_review artifact metadata block
+- metadata JSON
+- 사람용 Markdown 본문
 
-Normal approved next step is `implementing`.
+정상 승인 시 `next_allowed: implementing`이다.
 
-## Control-block requirements
+## 반환 형식
 
-For this skill:
-- `artifact_under_review` must be the implementation-design artifact
-- `read_ledger_ref` must be present
-- `direct_reads_used` must be a subset of `allowed_direct_reads`
-- `required_read_targets` must include the implementation-design artifact
-- `missing_read_targets` must be empty for `approved`
-- `missing_read_targets` must be empty for `approved_with_revisions`
-- `evidence_gate` must be `failed` when a required target is missing or when direct reads exceed the allowed set
+반드시 아래 두 블록만 반환한다.
+
+````text
+[ARTIFACT_METADATA_JSON]
+```json
+{ ... }
+```
+[ARTIFACT_BODY_MD]
+```md
+# Review Implementation Design
+...
+```
+````
+
+front matter를 붙이지 않는다.

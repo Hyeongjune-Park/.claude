@@ -1,58 +1,58 @@
 ---
 name: planning
-description: Produce a review-ready plan for one feature using only the active project root and the provided requirements.
+description: active project root와 제공된 요구사항만 사용해 review-ready `planning` artifact를 만드는 skill.
 ---
 
 # Planning
 
-Use this skill to create a planning artifact.
+이 skill은 `planning` artifact를 작성한다.
 
-## Rules
+## 규칙
 
-- inspect only the active project root
-- do not borrow structure or toolchain from sibling projects
-- do not implement code
-- do not perform review
-- if the root is empty, say it is empty; do not fill gaps with neighboring project assumptions
+- `active project root`만 읽는다.
+- sibling project의 구조나 toolchain을 빌려오지 않는다.
+- 코드를 구현하지 않는다.
+- review를 수행하지 않는다.
+- root가 비어 있으면 비어 있다고 적는다. 주변 프로젝트 가정으로 빈칸을 채우지 않는다.
+- 사람용 본문은 한국어를 기본으로 쓴다.
+- 상태값, verdict 값, stage 이름, path, field 이름은 그대로 둔다.
 
-## Required output
+## 필수 출력
 
-Return a planning artifact that includes:
 - goal
 - scope
-- affected files or file classes
+- affected files 또는 file classes
 - key decisions
 - risks
 - validation plan
 - evidence summary
-- one valid planning control block
+- `CONTROL_CONTRACT.md`를 따르는 유효한 metadata JSON
+- 사람용 Markdown 본문
 
-## Artifact metadata format rule
+## 반환 형식
 
-Return the planning result as one complete artifact body.
+반드시 아래 두 블록만 반환한다.
 
-That artifact must begin with exactly one YAML front-matter metadata block that matches `CONTROL_CONTRACT.md`.
+````text
+[ARTIFACT_METADATA_JSON]
+```json
+{ ... }
+```
+[ARTIFACT_BODY_MD]
+```md
+# Plan: ...
+...
+```
+````
 
-Use the current canonical form:
-- YAML front-matter at the top of the artifact
-- current field names from `CONTROL_CONTRACT.md`
+사람용 본문 앞에 YAML front matter를 붙이지 않는다.
+추가 설명 문장을 덧붙이지 않는다.
 
-Do not use:
-- a trailing `control:` block
-- `CONTROL_BLOCK`
-- `END_CONTROL_BLOCK`
-- standalone JSON control objects
-- alternate field names that are not in the current contract
+## Evidence 규칙
 
-## Scope discipline
-
-If the caller says a note has minimum fields, treat that as a minimum unless a stricter contract is explicitly proposed as a reviewable decision.
-
-## Evidence discipline
-
-Use:
+아래 버킷만 사용한다.
 - `Inspected directly`
 - `Provided by caller`
 - `Inferred`
 
-Do not claim direct inspection for files not read.
+실제로 읽지 않은 파일을 직접 확인했다고 적지 않는다.

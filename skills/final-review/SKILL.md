@@ -1,57 +1,42 @@
 ---
 name: final-review
-description: Review the actual implemented files and recorded validation outputs using only the bound review inputs, then return a final grounded verdict.
+description: bound review input만 사용해 실제 구현 파일과 validation evidence를 검토하고 최종 verdict를 반환하는 skill.
 ---
 
 # Final Review
 
-Use this skill only after implementation has completed and reviewable validation evidence exists.
+이 skill은 implementation 완료 후, review 가능한 validation evidence가 있을 때만 사용한다.
 
-## Required inputs from orchestration
+## 필수 입력
 
-The caller must provide:
-- the implementation artifact under review
-- the read-ledger reference
-- the required read targets
-- the allowed direct reads
-- the fixed policy-resolution reference
+caller는 아래를 제공해야 한다.
+- `artifact_under_review`인 implementation artifact
+- `read_ledger_ref`
+- `required_read_targets`
+- `allowed_direct_reads`
+- 고정된 `policy_resolution_ref`
 
-Do not expand these inputs on your own.
+입력을 임의로 확장하지 않는다.
 
-## Rules
+## 규칙
 
-- review actual files and recorded validation outputs
-- do not review the plan or design instead of the code
-- do not claim direct inspection for files not read
-- do not claim direct inspection outside the allowed direct reads
-- verify requirements against real source and validation evidence
-- do not return approval if a required read target is missing
+- 실제 구현 파일과 기록된 validation output만 검토한다.
+- plan이나 design으로 code review를 대체하지 않는다.
+- 읽지 않은 파일을 직접 읽은 것으로 주장하지 않는다.
+- `allowed_direct_reads` 밖 직접 읽기를 주장하지 않는다.
+- 실제 source와 validation evidence로 요구사항 충족 여부를 확인한다.
+- 필수 read target이 빠졌다고 판단되면 warning을 남긴다.
+- 현재 정책은 `warning` 모드이므로, read 관련 의심은 우선 `evidence_status: warning`으로 기록한다.
+- 사람용 본문은 한국어를 기본으로 쓴다.
 
-## Required read targets
+## 최소 필수 읽기 대상
 
-At minimum, final review must read:
-- the implementation artifact under review
-- the recorded validation evidence used by the review
-- every source file it claims to have inspected directly
+- implementation artifact
+- review가 참조한 validation evidence
+- 직접 확인했다고 주장한 모든 source file
 
-## Evidence slots
+## 필수 출력
 
-Use these slots exactly:
-- `Artifact under review`
-- `Read ledger ref`
-- `Required read targets`
-- `Allowed direct reads`
-- `Direct reads used`
-- `Missing read targets`
-- `Evidence gate`
-- `Inspected directly`
-- `Provided by caller`
-- `Inferred`
-- `Unverified`
-
-## Required output
-
-Return:
 - review scope
 - artifact under review
 - read ledger ref
@@ -59,25 +44,32 @@ Return:
 - allowed direct reads
 - direct reads used
 - missing read targets
-- evidence gate
+- evidence status
+- evidence warnings
 - evidence summary
 - overall assessment
 - blocking issues
 - non-blocking issues
 - verdict
-- one valid final_review artifact metadata block
+- metadata JSON
+- 사람용 Markdown 본문
 
-Normal approved next step is `none`.
-Use `workflow_stage: final_review`.
+정상 승인 시 `next_allowed: none`이다.
 
-## Control-block requirements
+## 반환 형식
 
-For this skill:
-- `artifact_under_review` must be the implementation artifact
-- `read_ledger_ref` must be present
-- `required_read_targets` must include the implementation artifact
-- `required_read_targets` must include the validation evidence referenced by the review
-- `direct_reads_used` must be a subset of `allowed_direct_reads`
-- `missing_read_targets` must be empty for `approved`
-- `missing_read_targets` must be empty for `approved_with_revisions`
-- `evidence_gate` must be `failed` when a required target is missing or when direct reads exceed the allowed set
+반드시 아래 두 블록만 반환한다.
+
+````text
+[ARTIFACT_METADATA_JSON]
+```json
+{ ... }
+```
+[ARTIFACT_BODY_MD]
+```md
+# Final Review
+...
+```
+````
+
+front matter를 붙이지 않는다.
