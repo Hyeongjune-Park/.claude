@@ -1,6 +1,6 @@
 ---
 title: STATE_SCHEMA
-version: 4
+version: 6
 status: active
 ---
 
@@ -13,22 +13,17 @@ status: active
 canonical path:
 - `.claude/state/<feature-slug>.json`
 
-관련 workflow run root:
+관련 workflow root:
 - `.claude/workflow/<feature-slug>/`
 
 ## 디렉터리 규칙
 
-새 프로젝트에서는 아래 디렉터리가 없을 수 있다.
+새 프로젝트에서 아래 디렉터리가 없어도 blocker가 아니다.
 - `.claude/`
 - `.claude/state/`
 - `.claude/workflow/`
 
-이 자체는 blocker가 아니다. 첫 persistence 시점에 생성한다.
-
-workflow run 내부는 아래처럼 분리한다.
-- `artifacts/`
-- `contracts/`
-- `evidence/`
+첫 persistence 시점에 생성한다.
 
 ## authority 순서
 
@@ -40,6 +35,18 @@ state 판정 우선순위:
 5. persisted `read trace`
 6. 직접 확인한 근거
 7. 자유 서술
+
+## backward-compat 정규화 규칙
+
+current schema와 맞지 않는 구형 state를 발견하면, orchestration layer는 controller 호출 전에 current schema로 정규화해 다시 저장한다.
+
+예:
+- `current_stage` → `workflow_state`
+- `in_progress` → `status: pending`
+- `pending_planning` → `planning_pending`
+- 축약된 `accepted_artifacts` 문자열 값 → current object shape
+
+구형 shape를 그대로 authority로 사용하지 않는다.
 
 ## 필수 top-level 필드
 
@@ -60,7 +67,10 @@ state 판정 우선순위:
 - `evidence_policy_mode`
 - `policy_resolution`
 - `artifacts`
+- `accepted_artifacts`
+- `pending_review`
 - `review_inputs`
+- `revision_request`
 - `last_review_evidence`
 - `last_validation_summary`
 - `last_transition`
@@ -69,13 +79,12 @@ state 판정 우선순위:
 ## 값 규칙
 
 ### `schema_version`
-초기값: `state@4`
+초기값: `state@6`
 
 ### `workflow_state`
 허용값:
 - `planning_pending`
 - `plan_ready_for_review`
-- `plan_approved`
 - `implementation_design_pending`
 - `implementation_design_ready_for_review`
 - `implementation_pending`
@@ -110,7 +119,6 @@ state 판정 우선순위:
 - `not_approved`
 
 ### `next_allowed`
-단일 단계명이다.
 허용값:
 - `planning`
 - `reviewing`
@@ -121,18 +129,11 @@ state 판정 우선순위:
 - `worklog_update`
 - `none`
 
-### `evidence_policy_mode`
-현재 기본값은 `warning`이다.
-read 정책 위반 의심은 우선 warning으로 기록한다.
-
 ### `policy_resolution`
 필수 키:
 - `ref`
 - `required_docs`
 - `consistent`
-
-`ref`는 canonical path를 가리킨다.
-- `.claude/workflow/<feature-slug>/contracts/policy-resolution.json`
 
 ### `artifacts`
 필수 키:
@@ -146,16 +147,37 @@ read 정책 위반 의심은 우선 warning으로 기록한다.
 각 값은 `null` 또는 아래 키를 가진 객체다.
 - `body_ref`
 - `meta_ref`
+- `history_body_ref`
+- `history_meta_ref`
 
-예시:
-```json
-{
-  "plan": {
-    "body_ref": ".claude/workflow/example/artifacts/plan.md",
-    "meta_ref": ".claude/workflow/example/artifacts/plan.meta.json"
-  }
-}
-```
+### `accepted_artifacts`
+필수 키:
+- `plan`
+- `implementation_design`
+- `implementation`
+
+각 값은 `null` 또는 아래 키를 가진 객체다.
+- `body_ref`
+- `meta_ref`
+- `history_body_ref`
+- `history_meta_ref`
+- `accepted_by_review_ref`
+- `scope_fingerprint`
+
+의미:
+- 현재 authoritative한 승인본만 기록한다
+- 최신 생성본이 있어도 아직 승인되지 않았다면 여기를 덮어쓰지 않는다
+- final review 승인 전에는 `implementation`을 채우지 않는다
+
+### `pending_review`
+필수 키:
+- `stage`
+- `artifact_ref`
+- `ledger_ref`
+
+값 규칙:
+- review 대기 상태가 아니면 모두 `null`
+- review 대기 상태면 해당 review stage와 대상 artifact를 기록한다
 
 ### `review_inputs`
 필수 키:
@@ -163,20 +185,43 @@ read 정책 위반 의심은 우선 warning으로 기록한다.
 - `implementation_review`
 - `final_review`
 
-값은 `null` 또는 아래 키를 가진 객체다.
+각 값은 `null` 또는 아래 키를 가진 객체다.
 - `ref`
 - `artifact_under_review`
 - `required_read_targets`
 - `allowed_direct_reads`
 
-각 `ref`는 아래 canonical path 중 하나다.
-- `.claude/workflow/<feature-slug>/contracts/read-ledger-reviewing.json`
-- `.claude/workflow/<feature-slug>/contracts/read-ledger-implementation-review.json`
-- `.claude/workflow/<feature-slug>/contracts/read-ledger-final-review.json`
+### `revision_request`
+필수 키:
+- `active`
+- `source_review_stage`
+- `source_review_ref`
+- `target_stage`
+- `allowed_delta`
+- `forbidden_changes`
+- `scope_preserved`
+- `auto_fix_allowed`
+- `attempt_count`
+- `max_attempts`
+
+값 규칙:
+- 활성 요청이 없으면 `active: false`
+- bounded retry 중일 때만 `active: true`
+- `max_attempts` 기본값은 `1`
+
+### `revision_request.attempt_count`
+의미:
+- 허가된 retry 수가 아니다
+- 실제로 **완료되어 저장된 bounded retry producer artifact 수**다
+
+규칙:
+- `approved_with_revisions` 직후에는 증가시키지 않는다
+- bounded retry producer artifact가 저장되고 state가 review-ready state로 이동할 때 증가시킨다
+- retry 실행 전에 `attempt_count == max_attempts`이면 malformed state다
 
 ### `last_review_evidence`
-review가 아직 없으면 `null`.
-그 외에는 아래 키가 필요하다.
+review가 아직 없으면 `null`
+그 외에는 아래 키를 가진 객체다.
 - `stage`
 - `artifact_under_review`
 - `read_ledger_ref`
@@ -189,20 +234,14 @@ review가 아직 없으면 `null`.
 - `evidence_status`
 - `warnings`
 
-`read_trace_ref`의 canonical path:
-- `.claude/workflow/<feature-slug>/evidence/read-trace-<stage>.json`
-
 ### `last_validation_summary`
-구현 validation이 아직 없으면 `null`.
-그 외에는 아래 키가 필요하다.
+구현 validation이 아직 없으면 `null`
+그 외에는 아래 키를 가진 객체다.
 - `ref`
 - `commands_requested`
 - `commands_executed`
 - `result`
 - `evidence_refs`
-
-권장 canonical path:
-- `.claude/workflow/<feature-slug>/evidence/validation-summary.json`
 
 ### `last_transition`
 필수 키:
@@ -212,69 +251,61 @@ review가 아직 없으면 `null`.
 - `artifact_path`
 - `timestamp`
 
-## Fresh-start 예시
-
-```json
-{
-  "schema_version": "state@4",
-  "feature_slug": "example-feature",
-  "active_project_root": "C:/path/to/project",
-  "workflow_state": "planning_pending",
-  "last_completed_stage": null,
-  "status": "pending",
-  "verdict": "none",
-  "next_allowed": "planning",
-  "blocker_present": false,
-  "blocker_reason": "",
-  "human_input_required": false,
-  "scope_fingerprint": null,
-  "stale": false,
-  "stale_reason": "",
-  "evidence_policy_mode": "warning",
-  "policy_resolution": {
-    "ref": null,
-    "required_docs": {},
-    "consistent": false
-  },
-  "artifacts": {
-    "plan": null,
-    "review_plan": null,
-    "implementation_design": null,
-    "review_implementation": null,
-    "implementation": null,
-    "review_final": null
-  },
-  "review_inputs": {
-    "reviewing": null,
-    "implementation_review": null,
-    "final_review": null
-  },
-  "last_review_evidence": null,
-  "last_validation_summary": null,
-  "last_transition": {
-    "from_state": null,
-    "to_state": "planning_pending",
-    "trigger": "state_initialized",
-    "artifact_path": null,
-    "timestamp": "2026-04-09T00:00:00Z"
-  },
-  "updated_at": "2026-04-09T00:00:00Z"
-}
-```
+권장 trigger:
+- `state_initialized`
+- `artifact_completed`
+- `review_approved`
+- `review_revision_requested`
+- `review_not_approved`
+- `approval_became_stale`
+- `human_gate_set`
 
 ## 갱신 규칙
 
-각 전이 완료 후 순서는 아래와 같다.
-1. `policy-resolution` 저장
-2. 다음 단계가 review라면 해당 `read ledger` 저장
-3. workflow artifact 저장
-4. artifact metadata block 추출 및 검증
-5. 현재 artifact를 기준으로 `workflow_state`, `last_completed_stage`, `next_allowed`, `scope_fingerprint`를 정규화
-6. 현재 stage에 대응하는 `artifacts.*` 항목을 artifact 경로로 갱신
-7. `last_transition`과 `updated_at` 갱신
-8. state 파일 저장
-9. 갱신된 state를 기준으로 `controller` 재판정
+### 생산 단계 완료 시
+- 현재 artifact를 `artifacts.*`에 기록한다
+- immutable history ref도 같이 기록한다
+- `last_completed_stage`를 해당 생산 stage로 갱신한다
+- 다음 review 대기 state로 이동한다
+- `pending_review`를 채운다
+- bounded retry 실행 결과라면 이 시점에만 `revision_request.attempt_count += 1`
+- `last_transition.trigger`는 `artifact_completed`
 
-artifact가 저장되었는데 `artifacts.*`가 여전히 `null`이면 state 갱신 실패다.
-artifact가 저장되었는데 `workflow_state`가 이전 pending 값에 남아 있으면 전이 실패다.
-state 저장 후 `controller` 재판정이 없으면 그 전이는 아직 완료가 아니다.
+### review 승인 시
+- `accepted_artifacts`의 해당 producer artifact를 갱신한다
+- `revision_request`를 초기화한다
+- `pending_review`를 비운다
+- 다음 producer pending state로 이동한다
+- `last_transition.trigger`는 `review_approved`
+
+### `approved_with_revisions` 시
+- `accepted_artifacts`는 유지한다
+- `revision_request`를 활성화한다
+- `attempt_count`는 증가시키지 않는다
+- target producer pending state로 이동한다
+- `pending_review`는 비운다
+- `last_transition.trigger`는 `review_revision_requested`
+
+### `not_approved` 시
+- `accepted_artifacts`는 유지한다
+- `revision_request`를 비활성화한다
+- target producer pending state로 이동한다
+- `pending_review`는 비운다
+- `last_transition.trigger`는 `review_not_approved`
+
+### stale 시
+- `workflow_state: approval_stale`
+- `status: stale`
+- `next_allowed: none`
+- `stale: true`
+
+## invariant
+
+아래를 모두 만족해야 state가 유효하다.
+1. stage output이 canonical path와 history path 둘 다에 저장된다
+2. artifact metadata가 유효하다
+3. state 파일이 최신 artifact를 반영한다
+4. review 대기 state면 `pending_review`가 비어 있지 않다
+5. bounded retry 중이면 `revision_request.active == true`
+6. 승인되지 않은 최신 artifact가 생겨도 `accepted_artifacts`를 덮어쓰지 않는다
+7. final review 승인 전에는 `accepted_artifacts.implementation == null`

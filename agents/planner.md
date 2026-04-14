@@ -20,15 +20,23 @@ description: active feature에 대해 active project root만 읽고 review-ready
 
 ## 필수 출력
 
-계획에는 최소한 아래가 있어야 한다.
-- goal
-- in scope / out of scope
-- affected files 또는 file classes
-- key decisions
-- risks
-- validation strategy
-- evidence summary
-- `CONTROL_CONTRACT.md`를 따르는 유효한 `planning` artifact metadata block
+planner는 반드시 아래 두 블록만 반환한다.
+- `[ARTIFACT_METADATA_JSON]`
+- `[ARTIFACT_BODY_MD]`
+
+metadata는 `CONTROL_CONTRACT.md`의 current field names를 그대로 사용한다.
+아래 별칭이나 구형 키를 쓰지 않는다.
+- `stage`
+- `artifact_version`
+- `scope_hash`
+- `ready_for_review`
+
+planning metadata는 최소한 아래를 포함한다.
+- `workflow_stage: planning`
+- `artifact_type: plan`
+- `status: completed`
+- `verdict: none`
+- `next_allowed: reviewing`
 
 ## Evidence 규칙
 

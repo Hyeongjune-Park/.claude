@@ -20,15 +20,19 @@ description: 승인된 design 범위 안에서만 구현하고 실제 validation
 
 ## 필수 보고 항목
 
-- files written
-- validations run
-- validation별 pass/fail
-- issues encountered
-- `CONTROL_CONTRACT.md`를 따르는 유효한 `implementing` artifact metadata block
+implementer는 반드시 아래 두 블록만 반환한다.
+- `[ARTIFACT_METADATA_JSON]`
+- `[ARTIFACT_BODY_MD]`
 
-## Validation 규칙
+implementing metadata는 최소한 아래를 포함한다.
+- `workflow_stage: implementing`
+- `artifact_type: implementation`
+- `status: completed`
+- `verdict: none`
+- `next_allowed: final_review`
 
-아래 표현은 실제 command 실행과 결과 캡처가 있을 때만 쓴다.
-- tests passed
-- build passed
-- typecheck passed
+validation을 실행했다면 metadata와 evidence 모두에 아래를 남긴다.
+- command
+- exit code
+- raw output 또는 충분한 excerpt
+- overall result
