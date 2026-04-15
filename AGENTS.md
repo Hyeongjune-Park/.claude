@@ -7,7 +7,7 @@
 1. `start-task` 실행으로 task 환경 초기화
 2. `/control-flow` 호출로 orchestration 진입
 
-직접 planning/implementing에 들어가지 않는다.
+직접 planning/build에 들어가지 않는다.
 
 ---
 
@@ -35,6 +35,16 @@ scripts\start-task.ps1 -TaskSlug <task-slug> [-ProjectRoot <path>]
 
 ---
 
+## 역할 구조
+
+| 역할 | 파일 | 담당 |
+|------|------|------|
+| Controller | `agents/controller.md` | state 판정, 다음 단계 결정 |
+| PO | `agents/po.md` | planning, build, bounded revision 생산 |
+| Reviewer | `agents/reviewer.md` | plan review, result review, final review |
+
+---
+
 ## worktree 필요 조건
 
 아래 경우에는 반드시 git worktree를 먼저 생성한다.
@@ -56,8 +66,6 @@ worktree 없이 격리 작업을 시작하면 `worktree-guard` hook이 차단한
 | harness 원칙 | `docs/HARNESS_PRINCIPLES.md` |
 | harness 범위 | `docs/HARNESS_SCOPE.md` |
 | self-refine 정책 | `docs/SELF_REFINE_POLICY.md` |
-| logs 구조 | `docs/LOGS_SCHEMA.md` |
-| 정책 인덱스 | `POLICY_INDEX.md` |
 | bootstrap 스크립트 | `scripts/` |
 | guardrail hooks | `hooks/` |
 | 로컬 프로젝트 템플릿 | `templates/CLAUDE.md` |
@@ -67,7 +75,7 @@ worktree 없이 격리 작업을 시작하면 `worktree-guard` hook이 차단한
 ## 금지 행동
 
 - `start-task` 없이 바로 `/control-flow` 호출 (state skeleton 없음)
-- approved plan 없이 구현 단계 진입
+- approved plan 없이 build 단계 진입
 - final review 없이 완료 처리
 - worktree 없이 격리 작업 시작
 - 로컬 `.claude/docs/`에 전역 정책 문서 생성

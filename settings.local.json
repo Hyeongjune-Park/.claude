@@ -39,7 +39,9 @@
       "Bash(zip -r test-harness-implementation-flow.zip test-harness-implementation-flow --exclude \"test-harness-implementation-flow/node_modules/*\")",
       "Bash(powershell.exe -Command \"Compress-Archive -Path ''test-harness-implementation-flow'' -DestinationPath ''test-harness-implementation-flow.zip'' -Force\")",
       "Bash(powershell.exe -Command \":*)",
-      "Bash(powershell.exe -Command \"Get-Item ''c:\\\\Users\\\\USER\\\\projects\\\\test-harness\\\\test-harness-implementation-flow.zip'' | Select-Object Name, @{N=''Size\\(KB\\)'';E={[math]::Round\\($_Length/1KB,1\\)}}\")"
+      "Bash(powershell.exe -Command \"Get-Item ''c:\\\\Users\\\\USER\\\\projects\\\\test-harness\\\\test-harness-implementation-flow.zip'' | Select-Object Name, @{N=''Size\\(KB\\)'';E={[math]::Round\\($_Length/1KB,1\\)}}\")",
+      "Bash(xargs ls *)",
+      "Bash(wc -l /c/Users/magic/projects/.claude/docs/*.md /c/Users/magic/projects/.claude/skills/*/*.md)"
     ]
   }
 }

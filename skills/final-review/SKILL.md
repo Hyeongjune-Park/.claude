@@ -13,6 +13,11 @@ description: standalone 직접 호출용 final-review skill. control-flow 내부
 - control-flow 내부 final_review 단계는 반드시 `Agent(subagent_type="reviewer")`를 사용한다.
 - 이 Skill은 사용자가 `/final-review`를 독립적으로 직접 호출할 때만 사용한다.
 
+## 검토 대상
+
+`final_review`는 build-summary artifact와 기록된 validation evidence를 함께 검토한다.
+acceptance 기준을 벗어난 새 요구사항을 verdict에 반영하지 않는다.
+
 ## 필수 입력
 
 caller는 아래를 제공해야 한다.

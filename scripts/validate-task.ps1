@@ -1,5 +1,15 @@
 # validate-task.ps1 — task 완료 전 필수 검증 (Windows)
 # 사용법: .\scripts\validate-task.ps1 -TaskSlug <task-slug> [-ProjectRoot <path>]
+#
+# 역할:
+#   - state 파일 존재 및 정합성 확인
+#   - 필수 artifact 존재 확인 (plan, acceptance, build-summary, review-result, review-final)
+#   - acceptance.md 존재 확인 (validation은 acceptance 기준으로만 판정)
+#   - 위반 시 상세 피드백 출력
+#
+# 종료 코드:
+#   0 — 검증 통과 (PASS 또는 PASS with WARN)
+#   1 — 필수 조건 미충족 (FAIL)
 
 param(
     [Parameter(Mandatory=$true)]
@@ -47,11 +57,11 @@ if (-not (Test-Path $StateFile)) {
 } else {
     Write-Host "[OK] state 파일 존재: $StateFile"
     $StateContent = Get-Content $StateFile -Raw
-    if ($StateContent -match '"current_state"\s*:\s*"([^"]+)"') {
-        $CurrentState = $Matches[1]
-        Write-Host "[OK] current_state: $CurrentState"
-        if ($CurrentState -ne "completed") {
-            Write-Warn "STATE_NOT_COMPLETED" "current_state가 completed가 아닙니다: $CurrentState"
+    if ($StateContent -match '"workflow_state"\s*:\s*"([^"]+)"') {
+        $WorkflowState = $Matches[1]
+        Write-Host "[OK] workflow_state: $WorkflowState"
+        if ($WorkflowState -ne "completed" -and $WorkflowState -ne "validation_pending" -and $WorkflowState -ne "final_review_pending") {
+            Write-Warn "STATE_NOT_READY" "workflow_state가 예상 단계가 아닙니다: $WorkflowState"
         }
     }
 }
@@ -71,9 +81,9 @@ if (-not (Test-Path $WorkflowDir -PathType Container)) {
 $RequiredArtifacts = @(
     "artifacts\plan.md",
     "artifacts\review-plan.md",
-    "artifacts\implementation-design.md",
-    "artifacts\review-implementation.md",
-    "artifacts\implementation.md",
+    "artifacts\acceptance.md",
+    "artifacts\build-summary.md",
+    "artifacts\review-result.md",
     "artifacts\review-final.md"
 )
 
@@ -88,16 +98,7 @@ foreach ($artifact in $RequiredArtifacts) {
     }
 }
 
-# --- 4. validation summary ---
-
-$ValidationSummary = Join-Path $WorkflowDir "evidence\validation-summary.json"
-if (-not (Test-Path $ValidationSummary)) {
-    Write-Warn "VALIDATION_SUMMARY_MISSING" "validation summary가 없습니다: $ValidationSummary"
-} else {
-    Write-Host "[OK] validation summary 존재"
-}
-
-# --- 5. logs 디렉터리 ---
+# --- 4. logs 디렉터리 ---
 
 if (-not (Test-Path $LogsDir -PathType Container)) {
     Write-Warn "LOGS_DIR_MISSING" "logs 디렉터리가 없습니다: $LogsDir"

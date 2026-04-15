@@ -16,17 +16,17 @@ status: active
 - 단일 feature workflow
 - small~medium 규모의 backend 또는 full-stack 작업
 - 비어 있거나 파일 수가 많지 않은 project root
-- `planning → reviewing → implementation_design → implementation_review → implementing → final_review`
+- `planning → plan_review → build → result_review → validation → final_review`
 
 ## In scope
 
 하니스가 자동화할 수 있는 것:
-- feature 단위 `planning`
-- `reviewing`
-- `implementation_design`
-- `implementation_review`
-- `implementing`
-- `final_review`
+- feature 단위 `planning` (PO: spec / plan / acceptance 생산)
+- `plan_review` (reviewer)
+- `build` (PO: design + implementation)
+- `result_review` (reviewer)
+- `validation` (validate-task 스크립트 실행)
+- `final_review` (reviewer)
 - `.claude/workflow/` 아래 workflow artifact 저장
 - `.claude/state/` 아래 machine-readable state 저장
 - main workflow가 충분히 진행된 뒤의 선택적 사람용 문서 저장
@@ -85,7 +85,10 @@ main workflow의 authoritative persistence는 아래 두 곳이다.
 
 ## Validation 규칙
 
-구현 단계가 validation 실행을 주장한다면, 정확한 command와 결과를 함께 남겨야 한다. 실행하지 않은 validation을 성공으로 적지 않는다.
+- validation은 `acceptance.md`에 정의된 기준으로만 판정한다.
+- reviewer가 acceptance 밖의 새로운 요구사항을 발명해 validation 기준으로 삼으면 안 된다.
+- `validate-task.*` 스크립트가 실행 command와 결과를 남겨야 한다. 실행하지 않은 validation을 성공으로 적지 않는다.
+- `acceptance.md`가 없으면 validation_pending 단계에서 실패 처리한다.
 
 ## 요약
 

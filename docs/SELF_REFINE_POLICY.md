@@ -1,6 +1,6 @@
 ---
 title: SELF_REFINE_POLICY
-version: 2
+version: 3
 status: active
 ---
 
@@ -15,8 +15,8 @@ status: active
 ## 적용 범위
 
 이 정책은 아래 review stage에 공통 적용한다.
-- `reviewing`
-- `implementation_review`
+- `plan_review`
+- `result_review`
 - `final_review`
 
 ## 기본 원칙
@@ -50,7 +50,7 @@ status: active
 - 기존 scope 안에서의 파일 목록 보정
 - 기존 validation 계획의 누락 보완
 - wording 정리, 순서 정리, 명시성 보강
-- 구현 단계에서는 기존 설계를 바꾸지 않는 작은 코드 수정
+- build 단계에서는 기존 설계를 바꾸지 않는 작은 코드 수정
 - final review에서 지적된 작은 검증 누락 또는 작은 버그 수정
 
 ## 금지되는 수정
@@ -67,9 +67,9 @@ status: active
 
 ## stage별 target 규칙
 
-- `reviewing`의 `approved_with_revisions` → `planning` 재수행
-- `implementation_review`의 `approved_with_revisions` → `implementation_design` 재수행
-- `final_review`의 `approved_with_revisions` → `implementing` 재수행
+- `plan_review`의 `approved_with_revisions` → `planning` 재수행
+- `result_review`의 `approved_with_revisions` → `build` 재수행
+- `final_review`의 `approved_with_revisions` → `build` 재수행
 
 review metadata의 `revision_target_stage`는 위 규칙과 일치해야 한다.
 일치하지 않으면 malformed review로 본다.
@@ -122,7 +122,7 @@ reviewer는 `approved_with_revisions`를 쉽게 쓰면 안 된다.
 
 ## producer 규칙
 
-bounded self-refactor로 다시 호출된 producer stage는 아래를 따른다.
+bounded self-refactor로 다시 호출된 producer stage(PO)는 아래를 따른다.
 - `required_revisions`만 반영한다
 - `forbidden_changes`를 건드리지 않는다
 - 새 요구사항을 끌어오지 않는다

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(New-Item -ItemType Directory -Path \"c:\\\\Users\\\\magic\\\\projects\\\\.claude\\\\skills\\\\po\" -Force)",
+      "Bash(Out-Null)"
+    ]
+  }
+}

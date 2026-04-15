@@ -1,6 +1,6 @@
 ---
 title: WORKFLOW_STATE_MACHINE
-version: 5
+version: 6
 status: active
 ---
 
@@ -14,9 +14,9 @@ status: active
 
 - `planning_pending`
 - `plan_ready_for_review`
-- `implementation_design_pending`
-- `implementation_design_ready_for_review`
-- `implementation_pending`
+- `build_pending`
+- `build_ready_for_review`
+- `validation_pending`
 - `final_review_pending`
 - `completed`
 - `blocked`
@@ -45,10 +45,10 @@ status: active
 ## 상태별 allowed next step
 
 - `planning_pending` → `planning`
-- `plan_ready_for_review` → `reviewing`
-- `implementation_design_pending` → `implementation_design`
-- `implementation_design_ready_for_review` → `implementation_review`
-- `implementation_pending` → `implementing`
+- `plan_ready_for_review` → `plan_review`
+- `build_pending` → `build`
+- `build_ready_for_review` → `result_review`
+- `validation_pending` → `validation`
 - `final_review_pending` → `final_review`
 - `completed` → `none`
 - `blocked` → `none`
@@ -59,18 +59,18 @@ status: active
 
 ### 1. planning 완료
 - from: `planning_pending`
-- by: `planning`
+- by: `planning` (PO)
 - to: `plan_ready_for_review`
 - 조건:
   - `plan.md`와 `plan.meta.json` 저장
   - state 반영 완료
-  - `pending_review.stage = reviewing`
+  - `pending_review.stage = plan_review`
 
 ### 2. plan review 승인
 - from: `plan_ready_for_review`
-- by: `reviewing`
+- by: `plan_review` (reviewer)
 - verdict: `approved`
-- to: `implementation_design_pending`
+- to: `build_pending`
 - 조건:
   - `review-plan.md`와 `review-plan.meta.json` 저장
   - `accepted_artifacts.plan` 갱신
@@ -78,7 +78,7 @@ status: active
 
 ### 3. plan review 수정 승인
 - from: `plan_ready_for_review`
-- by: `reviewing`
+- by: `plan_review` (reviewer)
 - verdict: `approved_with_revisions`
 - to: `planning_pending`
 - 조건:
@@ -91,89 +91,103 @@ status: active
 
 ### 4. plan review 비승인
 - from: `plan_ready_for_review`
-- by: `reviewing`
+- by: `plan_review` (reviewer)
 - verdict: `not_approved`
 - to: `planning_pending`
 - 조건:
   - `revision_request.active = false`
   - 이 전이 후 자동 재시도하지 않고 stop
 
-### 5. implementation design 완료
-- from: `implementation_design_pending`
-- by: `implementation_design`
-- to: `implementation_design_ready_for_review`
+### 5. build 완료
+- from: `build_pending`
+- by: `build` (PO)
+- to: `build_ready_for_review`
 - 조건:
-  - `implementation-design.md`와 `implementation-design.meta.json` 저장
+  - `build-summary.md`와 `build-summary.meta.json` 저장
   - state 반영 완료
-  - `pending_review.stage = implementation_review`
+  - `pending_review.stage = result_review`
 
-### 6. implementation review 승인
-- from: `implementation_design_ready_for_review`
-- by: `implementation_review`
+### 6. result review 승인
+- from: `build_ready_for_review`
+- by: `result_review` (reviewer)
 - verdict: `approved`
-- to: `implementation_pending`
+- to: `validation_pending`
 - 조건:
-  - `accepted_artifacts.implementation_design` 갱신
+  - `review-result.md`와 `review-result.meta.json` 저장
+  - `accepted_artifacts.build_summary` 갱신
   - `revision_request` 초기화
 
-### 7. implementation review 수정 승인
-- from: `implementation_design_ready_for_review`
-- by: `implementation_review`
+### 7. result review 수정 승인
+- from: `build_ready_for_review`
+- by: `result_review` (reviewer)
 - verdict: `approved_with_revisions`
-- to: `implementation_design_pending`
+- to: `build_pending`
 - 조건:
   - `revision_class = bounded`
   - `revision_scope_preserved = true`
   - `auto_fix_allowed = true`
-  - `revision_target_stage = implementation_design`
+  - `revision_target_stage = build`
   - `required_revisions`가 비어 있지 않음
   - `revision_request.active = true`
 
-### 8. implementation review 비승인
-- from: `implementation_design_ready_for_review`
-- by: `implementation_review`
+### 8. result review 비승인
+- from: `build_ready_for_review`
+- by: `result_review` (reviewer)
 - verdict: `not_approved`
-- to: `implementation_design_pending`
+- to: `build_pending`
 - 조건:
   - `revision_request.active = false`
   - 이 전이 후 자동 재시도하지 않고 stop
 
-### 9. implementation 완료
-- from: `implementation_pending`
-- by: `implementing`
+### 9. validation 완료 (통과)
+- from: `validation_pending`
+- by: `validation` (control-flow가 validate-task.* 실행)
 - to: `final_review_pending`
 - 조건:
-  - `implementation.md`와 `implementation.meta.json` 저장
-  - review 가능한 validation evidence 존재
+  - `validation-summary.json` evidence에 저장
+  - `last_validation_summary` 갱신
+  - validation result `passed`
   - `pending_review.stage = final_review`
 
-### 10. final review 승인
+### 10. validation 실패
+- from: `validation_pending`
+- by: `validation`
+- to: `build_pending`
+- 조건:
+  - `validation-summary.json` evidence에 저장
+  - `last_validation_summary` 갱신
+  - validation result `failed`
+  - `revision_request.active = false`
+  - 자동 재시도하지 않고 stop
+
+### 11. final review 승인
 - from: `final_review_pending`
-- by: `final_review`
+- by: `final_review` (reviewer)
 - verdict: `approved`
 - to: `completed`
 - 조건:
-  - `accepted_artifacts.implementation` 갱신
+  - `review-final.md`와 `review-final.meta.json` 저장
+  - `accepted_artifacts.build_summary` 최종 확정
   - `revision_request` 초기화
 
-### 11. final review 수정 승인
+### 12. final review 수정 승인
 - from: `final_review_pending`
-- by: `final_review`
+- by: `final_review` (reviewer)
 - verdict: `approved_with_revisions`
-- to: `implementation_pending`
+- to: `build_pending`
 - 조건:
   - `revision_class = bounded`
   - `revision_scope_preserved = true`
   - `auto_fix_allowed = true`
-  - `revision_target_stage = implementing`
+  - `revision_target_stage = build`
   - `required_revisions`가 비어 있지 않음
   - `revision_request.active = true`
 
-### 12. final review 비승인
+### 13. final review 비승인
 - from: `final_review_pending`
-- by: `final_review`
+- by: `final_review` (reviewer)
 - verdict: `not_approved`
-- to: `implementation_pending`
+- to: `build_pending`
 - 조건:
   - `revision_request.active = false`
   - 이 전이 후 자동 재시도하지 않고 stop
@@ -186,9 +200,11 @@ status: active
 2. review 대기 state
 3. review `approved` 후 다음 producer stage 진입
 4. review `approved_with_revisions` 후 bounded retry 진입
+5. validation 통과 후 final_review_pending 진입
 
 자동 진행하지 않는 경우:
 - review `not_approved` 후 pending state
+- validation `failed` 후 pending state
 - `blocked`
 - `approval_stale`
 - `human_gate_required`
@@ -245,6 +261,7 @@ status: active
 - stale approval
 - specialist가 `status: blocked`
 - `evidence_status: failed` (Q1 또는 Q2 해당 시)
+- validation `failed`
 
 ## persistence invariant
 

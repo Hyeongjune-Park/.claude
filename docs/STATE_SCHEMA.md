@@ -1,6 +1,6 @@
 ---
 title: STATE_SCHEMA
-version: 6
+version: 7
 status: active
 ---
 
@@ -44,7 +44,12 @@ current schema와 맞지 않는 구형 state를 발견하면, orchestration laye
 - `current_stage` → `workflow_state`
 - `in_progress` → `status: pending`
 - `pending_planning` → `planning_pending`
+- `implementation_design_pending` → `build_pending`
+- `implementation_design_ready_for_review` → `build_ready_for_review`
+- `implementation_pending` → `build_pending`
 - 축약된 `accepted_artifacts` 문자열 값 → current object shape
+- `artifacts.implementation_design` / `artifacts.review_implementation` / `artifacts.implementation` → `artifacts.build_summary` / `artifacts.review_result` (대응 관계 보존)
+- `artifacts.acceptance` 키 누락 → `null`로 초기화 (v7 이전 state 정규화)
 
 구형 shape를 그대로 authority로 사용하지 않는다.
 
@@ -79,15 +84,15 @@ current schema와 맞지 않는 구형 state를 발견하면, orchestration laye
 ## 값 규칙
 
 ### `schema_version`
-초기값: `state@6`
+초기값: `state@7`
 
 ### `workflow_state`
 허용값:
 - `planning_pending`
 - `plan_ready_for_review`
-- `implementation_design_pending`
-- `implementation_design_ready_for_review`
-- `implementation_pending`
+- `build_pending`
+- `build_ready_for_review`
+- `validation_pending`
 - `final_review_pending`
 - `completed`
 - `blocked`
@@ -97,10 +102,10 @@ current schema와 맞지 않는 구형 state를 발견하면, orchestration laye
 ### `last_completed_stage`
 허용값 또는 `null`:
 - `planning`
-- `reviewing`
-- `implementation_design`
-- `implementation_review`
-- `implementing`
+- `plan_review`
+- `build`
+- `result_review`
+- `validation`
 - `final_review`
 - `worklog_update`
 
@@ -121,10 +126,10 @@ current schema와 맞지 않는 구형 state를 발견하면, orchestration laye
 ### `next_allowed`
 허용값:
 - `planning`
-- `reviewing`
-- `implementation_design`
-- `implementation_review`
-- `implementing`
+- `plan_review`
+- `build`
+- `result_review`
+- `validation`
 - `final_review`
 - `worklog_update`
 - `none`
@@ -139,22 +144,29 @@ current schema와 맞지 않는 구형 state를 발견하면, orchestration laye
 필수 키:
 - `plan`
 - `review_plan`
-- `implementation_design`
-- `review_implementation`
-- `implementation`
+- `acceptance`
+- `build_summary`
+- `review_result`
 - `review_final`
 
-각 값은 `null` 또는 아래 키를 가진 객체다.
+`plan`, `review_plan`, `build_summary`, `review_result`, `review_final`의 값은 `null` 또는 아래 키를 가진 객체다.
 - `body_ref`
 - `meta_ref`
 - `history_body_ref`
 - `history_meta_ref`
 
+`acceptance`의 값은 `null` 또는 아래 키를 가진 객체다. (metadata 없음, body만 추적)
+- `body_ref`
+
+의미:
+- `acceptance`는 planning 단계에서 PO가 생성하는 정식 artifact다
+- validation은 acceptance 기준으로만 판정한다
+- `acceptance.md`가 없으면 `validation_pending` 진입 전 control-flow가 차단한다
+
 ### `accepted_artifacts`
 필수 키:
 - `plan`
-- `implementation_design`
-- `implementation`
+- `build_summary`
 
 각 값은 `null` 또는 아래 키를 가진 객체다.
 - `body_ref`
@@ -167,7 +179,7 @@ current schema와 맞지 않는 구형 state를 발견하면, orchestration laye
 의미:
 - 현재 authoritative한 승인본만 기록한다
 - 최신 생성본이 있어도 아직 승인되지 않았다면 여기를 덮어쓰지 않는다
-- final review 승인 전에는 `implementation`을 채우지 않는다
+- final review 승인 전에는 `build_summary`를 최종 확정하지 않는다
 
 ### `pending_review`
 필수 키:
@@ -181,8 +193,8 @@ current schema와 맞지 않는 구형 state를 발견하면, orchestration laye
 
 ### `review_inputs`
 필수 키:
-- `reviewing`
-- `implementation_review`
+- `plan_review`
+- `result_review`
 - `final_review`
 
 각 값은 `null` 또는 아래 키를 가진 객체다.
@@ -235,7 +247,7 @@ review가 아직 없으면 `null`
 - `warnings`
 
 ### `last_validation_summary`
-구현 validation이 아직 없으면 `null`
+validation이 아직 없으면 `null`
 그 외에는 아래 키를 가진 객체다.
 - `ref`
 - `commands_requested`
@@ -257,6 +269,8 @@ review가 아직 없으면 `null`
 - `review_approved`
 - `review_revision_requested`
 - `review_not_approved`
+- `validation_passed`
+- `validation_failed`
 - `approval_became_stale`
 - `human_gate_set`
 
@@ -275,7 +289,7 @@ review가 아직 없으면 `null`
 - `accepted_artifacts`의 해당 producer artifact를 갱신한다
 - `revision_request`를 초기화한다
 - `pending_review`를 비운다
-- 다음 producer pending state로 이동한다
+- 다음 producer pending state 또는 validation_pending으로 이동한다
 - `last_transition.trigger`는 `review_approved`
 
 ### `approved_with_revisions` 시
@@ -293,6 +307,12 @@ review가 아직 없으면 `null`
 - `pending_review`는 비운다
 - `last_transition.trigger`는 `review_not_approved`
 
+### validation 완료 시
+- `last_validation_summary`를 갱신한다
+- validation `passed`면 `final_review_pending`으로 이동
+- validation `failed`면 `build_pending`으로 이동하고 stop
+- `last_transition.trigger`는 `validation_passed` 또는 `validation_failed`
+
 ### stale 시
 - `workflow_state: approval_stale`
 - `status: stale`
@@ -302,13 +322,13 @@ review가 아직 없으면 `null`
 ## invariant
 
 아래를 모두 만족해야 state가 유효하다.
-1. stage output이 canonical path와 history path 둘 다에 저장된다
+1. stage output이 canonical path와 history path 둘 다에 저장된다 (acceptance 제외 — body만 저장)
 2. artifact metadata가 유효하다
 3. state 파일이 최신 artifact를 반영한다
 4. review 대기 state면 `pending_review`가 비어 있지 않다
 5. bounded retry 중이면 `revision_request.active == true`
 6. 승인되지 않은 최신 artifact가 생겨도 `accepted_artifacts`를 덮어쓰지 않는다
-7. final review 승인 전에는 `accepted_artifacts.implementation == null`
+7. final review 승인 전에는 `accepted_artifacts.build_summary`가 최종 확정되지 않는다
 8. `review_inputs.<stage>.allowed_direct_reads`는 해당 read ledger의 `allowed_direct_reads`와 정확히 일치한다 (count + content 모두)
 9. state 파일은 carry-forward 방식으로만 갱신한다. 기존 필드를 비우거나 처음부터 재구성하지 않는다
 10. `last_review_evidence.allowed_direct_reads`는 reviewer 출력이 아니라 read ledger에서 직접 가져온다

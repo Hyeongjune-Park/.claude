@@ -1,6 +1,6 @@
 ---
 name: reviewing
-description: standalone 직접 호출용 reviewing skill. control-flow 내부 specialist 호출에는 사용하지 않는다.
+description: standalone 직접 호출용 reviewer skill. plan_review / result_review / final_review 세 종류를 다룬다. control-flow 내부 호출에는 사용하지 않는다.
 ---
 
 # Reviewing
@@ -9,13 +9,22 @@ description: standalone 직접 호출용 reviewing skill. control-flow 내부 sp
 
 ## 중요
 
-- `control-flow` 내부 review stage에는 이 Skill을 사용하지 않는다.
-- control-flow 내부 reviewing / implementation_review / final_review 단계는 반드시 `Agent(subagent_type="reviewer")`를 사용한다.
+- `control-flow` 내부 review 단계에는 이 Skill을 사용하지 않는다.
+- control-flow 내부 `plan_review`, `result_review`, `final_review` 단계는 반드시 `Agent(subagent_type="reviewer")`를 사용한다.
 - 이 Skill은 사용자가 `/reviewing`을 독립적으로 직접 호출할 때만 사용한다.
+
+## review 종류
+
+| stage | 검토 대상 | 주요 체크 항목 |
+|-------|-----------|----------------|
+| `plan_review` | `plan.md` (+ acceptance.md 포함) | scope drift, hidden assumption, missing acceptance, risk |
+| `result_review` | `build-summary.md` | 구현 정합성, UX 품질, evidence 충분성, validation completeness |
+| `final_review` | build-summary + validation evidence | acceptance 기준 충족 여부, 최종 승인 |
 
 ## 필수 입력
 
 caller는 아래를 제공해야 한다.
+- `stage` (`plan_review` / `result_review` / `final_review`)
 - `artifact_under_review`
 - `read_ledger_ref`
 - `required_read_targets`
@@ -39,10 +48,11 @@ reviewer가 반환하는 metadata에서 유효한 필드:
 
 ## 규칙
 
-- plan artifact만 검토한다.
-- plan을 implementation으로 다시 쓰지 않는다.
+- 지정된 `stage`에 맞는 artifact만 검토한다.
+- 검토 대상 artifact를 다시 작성하지 않는다.
 - blocking issue와 non-blocking issue를 분리한다.
 - 근거 없는 주장 없이 review한다.
 - `allowed_direct_reads` 밖 직접 읽기를 주장하지 않는다.
 - `approved_with_revisions`는 좁고 명확한 수정일 때만 사용한다.
 - 수정 요구가 넓거나 방향이 흔들리면 `not_approved`를 사용한다.
+- acceptance 밖의 새로운 요구사항을 발명해 verdict에 반영하지 않는다.

@@ -17,12 +17,12 @@
 - stop 또는 completed 상태까지 반복
 
 전문 stage는 work plane만 담당한다.
-- `planning`
-- `reviewing`
-- `implementation-design`
-- `implementation-review`
-- `implementing`
-- `final-review`
+- `planning` (PO)
+- `plan_review` (reviewer)
+- `build` (PO)
+- `result_review` (reviewer)
+- `validation`
+- `final_review` (reviewer)
 
 세 가지를 섞지 않는다.
 - 사람용 문서: `docs/`, `worklog/`

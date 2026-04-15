@@ -69,14 +69,29 @@ Skill 도구로 specialist를 호출하면 안 된다.
 Skill은 standalone 직접 호출용이다.
 
 stage별 매핑:
-- `planning` → `Agent(subagent_type="planner")`
-- `reviewing` → `Agent(subagent_type="reviewer")`
-- `implementation_design` → `Agent(subagent_type="implementation-designer")`
-- `implementation_review` → `Agent(subagent_type="reviewer")`
-- `implementing` → `Agent(subagent_type="implementer")`
+- `planning` → `Agent(subagent_type="po")`
+- `plan_review` → `Agent(subagent_type="reviewer")`
+- `build` → `Agent(subagent_type="po")`
+- `result_review` → `Agent(subagent_type="reviewer")`
 - `final_review` → `Agent(subagent_type="reviewer")`
+- `validation` → validate-task 스크립트 직접 실행 (specialist agent 호출 아님, 아래 참조)
 
 `controller`도 Agent 도구로 호출한다.
+
+## validation 단계 처리 규칙
+
+`next_step: validation`이면 specialist agent를 호출하지 않고 아래를 직접 수행한다.
+
+0. `artifacts/acceptance.md` 존재 확인 — 없으면 즉시 `blocked` 처리하고 stop
+1. `validate-task.sh` (Unix) 또는 `validate-task.ps1` (Windows) 실행
+2. 실행 결과(exit code, output)를 수집한다
+3. validation summary를 `evidence/validation-summary-<timestamp>.json`에 저장한다
+4. `last_validation_summary`를 갱신한다
+5. result `passed`면 `final_review_pending`으로 state 전이
+6. result `failed`면 `build_pending`으로 state 전이 후 stop
+7. state 갱신 후 `controller` 재판정
+
+validate-task 스크립트가 없으면: stop하고 사용자에게 보고한다.
 
 ## raw specialist output 규칙
 
@@ -102,6 +117,8 @@ stage별 매핑:
   - `pending_planning`
   - `pending_reviewing`
   - `pending_implementing`
+  - `implementation_design_pending`
+  - `implementation_pending`
 - current schema와 맞지 않는 기존 state를 발견하면, controller 호출 전에 current schema로 정규화한 뒤 저장한다.
 - state 정규화 없이 workflow를 진행하지 않는다.
 
@@ -110,8 +127,8 @@ stage별 매핑:
 review 단계 호출 전에는 반드시 persisted `read ledger`를 만든다.
 
 canonical path:
-- `reviewing` → `.claude/workflow/<feature-slug>/contracts/read-ledger-reviewing.json`
-- `implementation_review` → `.claude/workflow/<feature-slug>/contracts/read-ledger-implementation-review.json`
+- `plan_review` → `.claude/workflow/<feature-slug>/contracts/read-ledger-plan-review.json`
+- `result_review` → `.claude/workflow/<feature-slug>/contracts/read-ledger-result-review.json`
 - `final_review` → `.claude/workflow/<feature-slug>/contracts/read-ledger-final-review.json`
 
 각 ledger 필수 키:
@@ -149,7 +166,8 @@ ledger `allowed_direct_reads` 필수 포함 항목:
 - state 정규화
 - `controller` 호출
 - review용 `read ledger` 생성
-- specialist agent 1회 호출
+- specialist agent 1회 호출 (validation 제외)
+- validation 단계 직접 실행
 - specialist 반환에서 `ARTIFACT_METADATA_JSON`과 `ARTIFACT_BODY_MD` 추출
 - latest artifact body 저장
 - latest artifact sidecar metadata 저장
@@ -166,19 +184,23 @@ ledger `allowed_direct_reads` 필수 포함 항목:
 
 latest artifact body:
 - `planning` → `.claude/workflow/<feature-slug>/artifacts/plan.md`
-- `reviewing` → `.claude/workflow/<feature-slug>/artifacts/review-plan.md`
-- `implementation_design` → `.claude/workflow/<feature-slug>/artifacts/implementation-design.md`
-- `implementation_review` → `.claude/workflow/<feature-slug>/artifacts/review-implementation.md`
-- `implementing` → `.claude/workflow/<feature-slug>/artifacts/implementation.md`
+- `plan_review` → `.claude/workflow/<feature-slug>/artifacts/review-plan.md`
+- `build` → `.claude/workflow/<feature-slug>/artifacts/build-summary.md`
+- `result_review` → `.claude/workflow/<feature-slug>/artifacts/review-result.md`
 - `final_review` → `.claude/workflow/<feature-slug>/artifacts/review-final.md`
 
 latest artifact metadata:
 - `planning` → `.claude/workflow/<feature-slug>/artifacts/plan.meta.json`
-- `reviewing` → `.claude/workflow/<feature-slug>/artifacts/review-plan.meta.json`
-- `implementation_design` → `.claude/workflow/<feature-slug>/artifacts/implementation-design.meta.json`
-- `implementation_review` → `.claude/workflow/<feature-slug>/artifacts/review-implementation.meta.json`
-- `implementing` → `.claude/workflow/<feature-slug>/artifacts/implementation.meta.json`
+- `plan_review` → `.claude/workflow/<feature-slug>/artifacts/review-plan.meta.json`
+- `build` → `.claude/workflow/<feature-slug>/artifacts/build-summary.meta.json`
+- `result_review` → `.claude/workflow/<feature-slug>/artifacts/review-result.meta.json`
 - `final_review` → `.claude/workflow/<feature-slug>/artifacts/review-final.meta.json`
+
+정식 co-artifact (PO가 plan mode에서 저장, body만 추적):
+- `artifacts/acceptance.md` ← validation의 판정 기준; 없으면 planning 완료 불가
+
+supplementary artifact (추적 없음):
+- `artifacts/spec.md`
 
 ## artifact body integrity check
 
@@ -194,7 +216,7 @@ artifact body 저장 전 아래를 확인한다.
 ### `approved`
 - 해당 producer artifact를 `accepted_artifacts`에 반영한다
 - `revision_request`를 초기화한다
-- 다음 producer pending state로 이동한다
+- 다음 state로 이동한다 (plan_review → build_pending, result_review → validation_pending, final_review → completed)
 - 계속 진행 가능하다
 
 ### `approved_with_revisions`
@@ -311,7 +333,7 @@ state를 처음부터 재구성하면 carry-forward 원칙 위반이다.
   - 승인 → 해당 producer artifact만 `accepted_artifacts`에 반영
   - 수정 승인 → `accepted_artifacts`는 유지하고 `revision_request` 생성
   - 비승인 → `accepted_artifacts`는 유지하고 stop-ready pending state 기록
-- final review 승인 전에는 `accepted_artifacts.implementation`을 갱신하지 않는다
+- final review 승인 전에는 `accepted_artifacts.build_summary`를 최종 확정하지 않는다
 
 ### review_inputs 소스 매핑 규칙
 
@@ -386,17 +408,18 @@ evidence 필드는 control-flow가 계산한다. reviewer가 제공한 evidence 
 1. 현재 state 기준으로 `controller` 호출
 2. `controller`가 `continue: false` 또는 `next_step: none`이면 종료
 3. 다음 단계가 review면 필요한 read ledger 존재를 보장한다. 없으면 즉시 생성한다
-4. 정확히 한 specialist **agent** 호출
-5. specialist 반환에서 `ARTIFACT_METADATA_JSON`과 `ARTIFACT_BODY_MD`를 추출
-6. latest artifact body 저장
-7. latest artifact metadata 저장
-8. immutable history 저장
-9. metadata 검증
-10. review 단계면 observed `read trace` 저장
-11. evidence 계산 및 반영
-12. state 파일 갱신
-13. 갱신된 state로 `controller` 재호출
-14. 계속 진행 가능하면 반복
+4. `next_step: validation`이면 validate-task 스크립트 직접 실행 (specialist agent 미호출)
+5. 그 외 단계면 정확히 한 specialist **agent** 호출
+6. specialist 반환에서 `ARTIFACT_METADATA_JSON`과 `ARTIFACT_BODY_MD`를 추출
+7. latest artifact body 저장
+8. latest artifact metadata 저장
+9. immutable history 저장
+10. metadata 검증
+11. review 단계면 observed `read trace` 저장
+12. evidence 계산 및 반영
+13. state 파일 갱신
+14. 갱신된 state로 `controller` 재호출
+15. 계속 진행 가능하면 반복
 
 ## 응답 직전 final check
 
@@ -420,6 +443,7 @@ evidence 필드는 control-flow가 계산한다. reviewer가 제공한 evidence 
 - `approval_stale`
 - `human_gate_required`
 - review `not_approved`
+- validation `failed`
 - bounded retry 1회 후에도 다시 승인되지 않음
 - `controller`가 stop 판정을 내림
 - `evidence_status: failed` (Q1: missing required targets 또는 Q2: bound violation)

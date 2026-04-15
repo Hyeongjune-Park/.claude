@@ -62,8 +62,8 @@ state 파일과 workflow artifact가 모두 없으면:
 
 ### review 대기 state
 아래 state는 review로 계속 진행한다.
-- `plan_ready_for_review` → `reviewing`
-- `implementation_design_ready_for_review` → `implementation_review`
+- `plan_ready_for_review` → `plan_review`
+- `build_ready_for_review` → `result_review`
 - `final_review_pending` → `final_review`
 
 단, 필요한 `read ledger`가 없으면 hard stop reason이 아니라 `control-flow` repair 대상으로 본다.
@@ -71,13 +71,14 @@ state 파일과 workflow artifact가 모두 없으면:
 ### forward pending state
 아래 pending state는 최근 전이가 정상 승인 또는 초기화에서 왔을 때만 계속 진행한다.
 - `planning_pending`
-- `implementation_design_pending`
-- `implementation_pending`
+- `build_pending`
+- `validation_pending`
 
 자동 진행 허용 trigger:
 - `state_initialized`
 - `review_approved`
 - `review_revision_requested`
+- `validation_passed`
 
 ### bounded revision state
 아래를 모두 만족하면 bounded retry로 계속 진행한다.
@@ -91,6 +92,7 @@ state 파일과 workflow artifact가 모두 없으면:
 ### rework waiting state
 아래 경우는 자동 진행하지 않고 stop한다.
 - `last_transition.trigger == review_not_approved`
+- `last_transition.trigger == validation_failed`
 - `revision_request.active == false`
 - pending state이지만 bounded retry 조건이 아님
 
@@ -109,6 +111,7 @@ state 파일과 workflow artifact가 모두 없으면:
 - specialist가 `status: blocked`로 반환함
 - `evidence_status: failed`
 - review `not_approved` 후 pending state에 진입함
+- validation `failed` 후 build_pending으로 전환됨
 - bounded retry 조건을 만족하지 않는 `approved_with_revisions` 결과가 들어옴
 
 ## 출력 형식
@@ -122,10 +125,10 @@ state 파일과 workflow artifact가 모두 없으면:
 
 `next_step` 허용값:
 - `planning`
-- `reviewing`
-- `implementation_design`
-- `implementation_review`
-- `implementing`
+- `plan_review`
+- `build`
+- `result_review`
+- `validation`
 - `final_review`
 - `worklog_update`
 - `none`
@@ -138,4 +141,6 @@ state 파일과 workflow artifact가 모두 없으면:
 - review approved 후 pending → 계속
 - review revision requested 후 pending → 1회만 계속
 - review not approved 후 pending → stop
+- validation passed → 계속
+- validation failed → stop
 - internal precondition missing → `control-flow`가 먼저 repair

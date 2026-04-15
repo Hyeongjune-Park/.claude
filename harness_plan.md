@@ -1,311 +1,435 @@
-# 전역 하니스 통합 계획서 초안 v1
+# 전역 하니스 통합 계획서 v3  
+## Controller + PO + Reviewer 구조 재편안
 
 ## 1. 문서 목적
 
-이 계획서는 현재 구축 중인 전역 하니스의 핵심 구조를 유지하면서, 다른 전문가 하니스의 장점인 `AGENTS/CLAUDE 진입 문서`, `task bootstrap script`, `hook 기반 강제`, `운영 로그`를 흡수해 더 견고한 기본 하니스로 재구성하기 위한 초안이다.
+이 계획서는 현재 구축 중인 전역 하니스의 핵심 제어 구조를 유지하면서, 생산 계층을 더 단순하고 강한 형태로 재편하기 위한 계획서다.
 
-현재 하니스의 핵심 목표는 planning → review → implementation-design → implementation-review → implementing → final review를 **제어 가능한 반자동 워크플로 시스템**으로 만드는 것이다. 또한 장기적으로는 병렬 세션까지 확장할 계획이므로, 새 구조는 단순 편의성보다 **예측 가능성, 역할 분리, 중지 가능성, 검증 가능성**을 강화해야 한다. 전역 하니스는 모든 프로젝트의 기본 골격을 제공하고, 프로젝트별 특수 정책은 이후 로컬 `.claude/docs`에서 덧붙이는 구조를 유지한다.
+기존 구조는 planning, implementation-design, implementing 등 생산 관련 역할이 여러 단계로 나뉘어 있었다. 이 구조는 통제에는 유리하지만, AI에게는 역할 간 handoff가 오히려 컨텍스트 손실과 정보 왜곡을 만들 수 있다.
+
+따라서 v3의 목적은 다음과 같다.
+
+- **상태기반 제어 코어는 유지**
+- **생산 계층은 PO 중심으로 단순화**
+- **리뷰는 독립 축으로 유지**
+- **운영 셸은 계속 강화**
+- **병렬 확장은 이 구조 위에서 준비**
+
+이 문서는 하니스를 “많이 나뉜 specialist 집합”에서 “적게 나뉘되 더 강하게 통제되는 구조”로 재정의한다.
 
 ---
 
 ## 2. 핵심 결론
 
-새 구조는 **통합**이 아니라 **계층화**로 간다.
+새 구조의 핵심은 다음 한 문장으로 정리된다.
+
+**“하니스는 Controller + PO + Reviewer의 3축으로 재편하고, state-authoritative orchestration은 그대로 유지한다.”**
 
 즉,
 
-- `planning`, `reviewing`, `implementation-design`, `implementation-review`, `implementing` 같은 **전문 스킬은 유지**
-- `controller`와 `control-flow` 같은 **상태기반 orchestration 계층도 유지**
-- 대신 그 위에
-  - 얇은 진입 문서
-  - task bootstrap script
-  - hook 기반 위반 감지/피드백
-  - append-only 로그 계층
-  을 추가한다
+- `controller`는 계속 흐름만 제어한다
+- `PO`는 planning, design, implementation, local adjustment를 한 축으로 담당한다
+- `reviewer`는 plan과 result에 대해 독립적으로 비판한다
 
-이 방향이 맞는 이유는, 현재 로드맵이 이미 `controller`, `state schema`, `evaluation harness`를 별도 축으로 삼고 있고, 병렬 확장도 중앙 controller와 lane/package state를 전제로 하기 때문이다. 이 구조를 문서 하나로 접으면 장기 목표와 충돌한다. 반대로 강제력이 필요한 규칙은 문서보다 script/hook이 더 적합하다.
+기존의 planner / implementation-designer / implementer를 각각 별도 specialist로 유지하지 않는다.  
+대신 **PO가 하나의 긴 컨텍스트를 유지한 채 생산을 담당**한다.
 
----
+이 구조의 장점은 다음과 같다.
 
-## 3. 이번 초안에서 채택하는 설계 원칙
+- handoff 감소
+- 맥락 보존 강화
+- 산출물 책임 주체 명확화
+- workflow specialist 과분화 완화
+- UI/UX와 코드, 설계 판단의 단일 맥락 유지
 
-### 원칙 1. 스킬/서브에이전트 지침은 짧고 강하게 유지한다
-
-채택한다.
-
-모든 skill과 subagent 지침은 **100줄 이내를 목표**로 한다.  
-다만 이건 “무조건 100줄 미만” 같은 기계적 제한이 아니라, **핵심 책임·금지사항·출력 계약·참조 문서만 남기고 세부 규칙은 외부 정책 문서로 분리한다**는 설계 원칙이다.
-
-이 원칙이 필요한 이유는 지침이 길어질수록 모델이 일부를 누락하거나, 여러 문서가 같은 규칙을 중복 서술하면서 드리프트가 생기기 쉽기 때문이다.
-
-실행 규칙:
-- skill/subagent 문서는 목적, 해야 할 일, 하지 말아야 할 일, 출력 형식, 참조 문서만 포함
-- evidence source mapping, 상태기계 세부 규칙, 정책 예외, validation 기준은 `docs/*.md`로 이동
-- 공통 계약은 skill마다 반복하지 않고 `CONTROL_CONTRACT.md`를 참조
-
-### 원칙 2. 중요한 규칙은 hook이 감지하고 피드백해야 한다
-
-강하게 채택한다.
-
-중요한 규칙은 “지키라고 써두는 것”으로 끝내지 않는다. 위반이 감지되면 hook이 즉시 개입해야 한다.
-
-적용 대상:
-- bootstrap 없이 바로 구현 시작
-- planning/approval 없이 구현 단계 진입
-- worktree 없이 병렬/격리 작업 시작
-- validation 없이 완료 처리
-- 금지된 경로로 직접 문서/코드 작성
-
-hook 동작 방식:
-- 위반 감지
-- 실패 또는 경고 판단
-- 위반 로그 기록
-- 정상 경로 안내
-- 필요 시 자동 재시도 지시 또는 control-flow 재진입 유도
-
-### 원칙 3. state와 별개의 로그 계층을 둔다
-
-채택한다.  
-하지만 **로그가 state를 대체해서는 안 된다.**
-
-이건 가장 중요한 결정이다.
-
-- **state**는 controller가 읽는 **정규화된 현재 상태 스냅샷**
-- **logs**는 append-only **증거·과정·실패 원인 기록**
-
-으로 분리한다.
-
-로그만 보고 controller가 다음 단계를 정하도록 바꾸는 건 권하지 않는다. 이유는 로그는 누적 기록이어서 다음 단계 판정용으로는 비결정적이고, 정규화 비용이 크며, 오히려 지금까지 어렵게 만든 state/evidence 정합성 구조를 다시 흐리게 만들기 때문이다.
-
-더 좋은 방향은 이렇다.
-
-- controller는 계속 state를 canonical source로 사용
-- logs는 evidence, self-feedback, audit, 디버깅, state 손상 시 복구 보조용으로 사용
-- state는 logs의 요약 ref만 가진다
-- hook과 self-refine는 logs를 보고 수정 판단을 보조한다
-
-즉, **state = canonical snapshot**, **logs = immutable evidence trail** 구조로 간다.
-
-### 원칙 4. 로컬 `.claude/docs`는 프로젝트 정책 전용으로 비워 둔다
-
-강하게 채택한다.
-
-전역 하니스는 모든 프로젝트의 기본 틀만 제공한다.  
-프로젝트 특화 규칙은 나중에 로컬 `.claude/docs`에 들어갈 것이므로, 전역 하니스는 이 경로에 일반 workflow 문서나 운영 문서를 쓰지 않는다.
-
-허용:
-- 로컬 `.claude/docs` 읽기
-- 로컬 `.claude/docs`를 override source로 사용
-
-금지:
-- 전역 하니스가 로컬 `.claude/docs`에 state/workflow/log/evidence 파일 생성
-- 전역 하니스가 로컬 `.claude/docs`에 기본 정책 문서 자동 쓰기
-
-대신 전역 하니스가 쓰는 런타임 파일은 아래 경로로 제한한다.
-- `.claude/state/`
-- `.claude/workflow/`
-- `.claude/logs/`
-
-### 원칙 5. 전역에는 실제 `CLAUDE.md`가 없어도 된다
-
-채택한다.
-
-전역 하니스의 canonical source는 실제 `CLAUDE.md`가 아니라
-- `AGENTS.md`
-- `templates/CLAUDE.md`
-
-가 되어도 충분하다.
-
-즉, 전역 하니스는 진입 문서의 **원본 템플릿**만 관리하고, 실제 프로젝트에서 쓰는 `CLAUDE.md`는 bootstrap 또는 init 과정에서 로컬 루트로 복사/동기화하는 구조가 더 낫다.
-
-이 방식이 좋은 이유는:
-- 전역과 로컬의 실제 사용 위치가 다르다는 현실과 맞고
-- 전역에 사용되지 않는 `CLAUDE.md`를 억지로 둘 필요가 없고
-- 템플릿/동기화 경로가 더 명확하기 때문이다
+단, 이 단순화는 **controller 제거를 의미하지 않는다.**  
+하니스는 여전히 controller 중심의 상태기반 제어 시스템이다.
 
 ---
 
-## 4. 새 구조의 핵심 설계
+## 3. v3에서 유지할 핵심 가치
 
-### 4-1. 계층 구조
+### 3-1. state-authoritative orchestration 유지
 
-#### A. Entry Layer
+다음 단계 판정의 기준은 계속 state다.
+
+- controller는 `.claude/state/*`를 canonical source로 사용
+- logs는 보조 증거 계층일 뿐 state를 대체하지 않음
+- artifacts는 state 판단을 보조하는 입력
+- 자유서술은 최후 수단
+
+### 3-2. evidence trail 유지
+
+review는 단순 의견이 아니라,  
+무엇을 읽고 어떤 근거로 판단했는지가 남아야 한다.
+
+- read ledger
+- read trace
+- artifact ref
+- validation summary ref
+
+이 구조는 reviewer 신뢰성을 지키기 위한 핵심이다.
+
+### 3-3. human gate 유지
+
+다음은 계속 human gate 대상이다.
+
+- scope ambiguity가 큰 경우
+- architecture freeze가 필요한 경우
+- stale approval 재사용 여부
+- 병렬 적합성 승인
+- merge 전 최종 통합 승인
+- failure tolerance 정책 결정
+
+### 3-4. bounded self-refactor 유지
+
+자동 수정은 계속 제한적으로만 허용한다.
+
+- 승인된 범위 안의 명확한 delta만 허용
+- 최대 1회
+- unrelated cleanup 금지
+- scope expansion 감지 시 즉시 stop
+
+### 3-5. delivery / persistence 분리 유지
+
+코드 delivery와 docs persistence는 계속 별도 흐름으로 둔다.
+
+- 구현 완료 ≠ docs save 자동 강제
+- worklog / plan-save / save-docs는 정책 기반 선택 흐름
+- persistence는 completion과 분리된 후속 단계
+
+---
+
+## 4. 새 역할 구조
+
+## 4-1. Controller
+
+### 역할
+- 현재 state 판정
+- 다음 합법 단계 선택
+- stop / continue / stale / blocked 판정
+- specialist 호출
+- approval invalidation 처리
+- logs / validation summary ref 연결
+- persistence flow 진입 여부 판단
+
+### 하지 말아야 할 일
+- plan을 직접 생산하지 않음
+- 설계를 대신 작성하지 않음
+- 코드를 직접 구현하지 않음
+- 리뷰 결론을 대신 꾸며내지 않음
+
+### 핵심 원칙
+**control-only**
+
+---
+
+## 4-2. PO
+
+### 역할
+PO는 기존의 아래 역할을 통합한다.
+
+- planner
+- implementation-designer
+- implementer
+
+### 책임 범위
+- 요구사항 해석
+- feature-level plan 작성
+- spec / acceptance 초안 생성
+- implementation design
+- 실제 코드 및 문서 산출물 생산
+- reviewer 피드백 반영
+- local validation 대응
+- 필요 시 bounded self-adjustment 수행
+
+### 장점
+- 처음부터 끝까지 동일 맥락 유지
+- “왜 이 설계를 택했는가”가 중간에 끊기지 않음
+- UI/UX 판단과 코드 판단이 분리되지 않음
+- 작은/중간 규모 feature 작업에서 효율적
+
+### 제한
+- 다음 단계 승인 권한 없음
+- 자기 plan을 self-approve하지 않음
+- global complete를 주장하지 않음
+- 병렬 상황에서는 lane 범위 밖 수정 금지
+
+---
+
+## 4-3. Reviewer
+
+### 역할
+Reviewer는 독립 검토 축이다.
+
+### 검토 시점
+1. **Plan Review**
+   - PO가 만든 spec / plan / acceptance 초안 검토
+   - scope drift, hidden assumption, missing acceptance, risk 체크
+
+2. **Result Review**
+   - PO가 만든 결과물 검토
+   - 구현 정합성, UX 품질, evidence 충분성, validation completeness 체크
+
+### 하지 말아야 할 일
+- plan을 대신 작성하지 않음
+- 구현을 대신 수행하지 않음
+- state를 직접 변경하지 않음
+- controller 역할을 대체하지 않음
+
+### 필요 시 확장 가능
+나중에 아래 역할은 reviewer 계층의 확장으로 붙일 수 있다.
+
+- validator
+- tester
+- security reviewer
+
+단, 이들은 controller와 동급이 아니라 reviewer 보조 또는 별도 validation specialist로 둔다.
+
+---
+
+## 5. 새 구조의 계층 설계
+
+## 5-1. Entry Layer
 - `AGENTS.md`
 - `templates/CLAUDE.md`
 
 역할:
-- 이 저장소에서의 정식 시작 경로 안내
-- 필수 절차 요약
-- 빠른 참조 표
-- policy / script / hook 위치 안내
+- 정식 시작 경로 안내
+- `start-task` 규칙 안내
+- control-flow 우선 원칙 요약
+- hook 위반 시 기대 동작 안내
+- 빠른 참조 표 제공
 
-#### B. Policy Layer
-- `docs/HARNESS_SCOPE.md`
-- `docs/HARNESS_PRINCIPLES.md`
-- `docs/CONTROL_CONTRACT.md`
-- `docs/WORKFLOW_STATE_MACHINE.md`
-- `docs/STATE_SCHEMA.md`
-- `docs/SELF_REFINE_POLICY.md`
-- `docs/HARNESS_EVALUATION_PLAN.md`
-- 이후 `PERSISTENCE_POLICY.md`, `HARNESS_CHANGE_POLICY.md`, `HARNESS_VERSIONING.md`
+---
+
+## 5-2. Policy Layer
+- `HARNESS_SCOPE.md`
+- `HARNESS_PRINCIPLES.md`
+- `CONTROL_CONTRACT.md`
+- `WORKFLOW_STATE_MACHINE.md`
+- `STATE_SCHEMA.md`
+- `SELF_REFINE_POLICY.md`
+- `HARNESS_EVALUATION_PLAN.md`
+- `PERSISTENCE_POLICY.md`
+- `HARNESS_CHANGE_POLICY.md`
+- `HARNESS_VERSIONING.md`
 
 역할:
-- 전역 하니스 규칙 정의
-- controller와 hook이 참고할 기준 제공
+- canonical control semantics 정의
+- stop / gate / stale / retry / completion 규칙 고정
+- controller, reviewer, hook이 참조할 기준 제공
 
-#### C. Orchestration Layer
+---
+
+## 5-3. Orchestration Layer
 - `.claude/agents/controller.md`
 - `.claude/skills/control-flow/SKILL.md`
 
 역할:
 - 현재 state 판정
 - 다음 합법 단계 선택
-- specialist 호출
-- stop / continue 판단
-- revision/stale/evidence 처리
+- PO / reviewer 호출
+- stop / continue / retry / reroute 판단
+- artifact 저장 이후 state 갱신
 
-#### D. Specialist Layer
-유지 대상:
-- `.claude/skills/planning/`
-- `.claude/skills/reviewing/`
-- `.claude/skills/implementation-design/`
-- `.claude/skills/implementation-review/`
-- `.claude/skills/implementing/`
-- 필요 시 `worklog-update`, `plan-save`, `save-docs`
+---
 
-보조 subagent:
-- planner
-- reviewer
-- implementation-designer
-- implementer
+## 5-4. Production Layer
+- `.claude/agents/po.md`
+- `.claude/skills/po/SKILL.md`
 
 역할:
-- 실제 산출물 생산
+- spec / plan / acceptance / implementation / local fixes 생산
+- feature 문맥 유지
+- reviewer 피드백 반영
 
-#### E. Bootstrap / Execution Layer
+### PO 내부 하위 모드
+PO 내부적으로는 아래 모드를 가질 수 있다.
+
+- plan mode
+- design mode
+- implementation mode
+- revise mode
+
+하지만 외부적으로는 **하나의 PO role**로 보이게 한다.
+
+즉, 과거의 `planning`, `implementation-design`, `implementing`을 별도 specialist로 노출하지 않는다.
+
+---
+
+## 5-5. Review Layer
+- `.claude/agents/reviewer.md`
+- `.claude/skills/reviewing/SKILL.md`
+
+역할:
+- PO 산출물 검토
+- plan review / result review 수행
+- verdict와 revision delta 제시
+- evidence sufficiency 판단
+
+---
+
+## 5-6. Bootstrap / Enforcement Layer
 - `scripts/start-task.sh`
 - `scripts/start-task.ps1`
 - `scripts/validate-task.sh`
 - `scripts/validate-task.ps1`
-- 필요 시 `scripts/complete-task.*`
-
-역할:
-- task 초기화
-- worktree 생성
-- 로그 디렉터리 준비
-- state/workflow/log skeleton 생성
-- 로컬 `CLAUDE.md` 템플릿 배치
-
-#### F. Guardrail Layer
 - hooks
 
 역할:
-- 규칙 위반 감지
-- 즉시 피드백
-- 위반 로그 기록
-- 정상 경로 재유도
-- 필요 시 차단
+- task 초기화
+- state / workflow / logs skeleton 생성
+- 로컬 `CLAUDE.md` 템플릿 배치
+- 정식 경로 우회 차단
+- policy violation 감지
+- validation gate 강제
 
-#### G. Runtime Data Layer
+---
+
+## 5-7. Runtime Data Layer
 - `.claude/state/`
 - `.claude/workflow/`
 - `.claude/logs/`
 
 역할:
-- 현재 상태
-- artifacts/contracts/evidence
-- append-only 과정 로그
-
-### 4-2. 파일 배치 초안
-
-    global-harness/
-    ├─ AGENTS.md
-    ├─ templates/
-    │  └─ CLAUDE.md
-    ├─ docs/
-    │  ├─ HARNESS_SCOPE.md
-    │  ├─ HARNESS_PRINCIPLES.md
-    │  ├─ CONTROL_CONTRACT.md
-    │  ├─ WORKFLOW_STATE_MACHINE.md
-    │  ├─ STATE_SCHEMA.md
-    │  ├─ SELF_REFINE_POLICY.md
-    │  ├─ HARNESS_EVALUATION_PLAN.md
-    │  ├─ PERSISTENCE_POLICY.md
-    │  ├─ HARNESS_CHANGE_POLICY.md
-    │  └─ HARNESS_VERSIONING.md
-    ├─ scripts/
-    │  ├─ start-task.sh
-    │  ├─ start-task.ps1
-    │  ├─ validate-task.sh
-    │  └─ validate-task.ps1
-    ├─ hooks/
-    │  ├─ pre-implement-check.*
-    │  ├─ pre-complete-check.*
-    │  ├─ worktree-guard.*
-    │  └─ policy-guard.*
-    └─ .claude/
-       ├─ agents/
-       │  ├─ controller.md
-       │  ├─ planner.md
-       │  ├─ reviewer.md
-       │  ├─ implementation-designer.md
-       │  └─ implementer.md
-       ├─ skills/
-       │  ├─ control-flow/
-       │  ├─ planning/
-       │  ├─ reviewing/
-       │  ├─ implementation-design/
-       │  ├─ implementation-review/
-       │  ├─ implementing/
-       │  ├─ worklog-update/
-       │  ├─ plan-save/
-       │  └─ save-docs/
-       ├─ state/
-       ├─ workflow/
-       └─ logs/
-
-프로젝트 로컬에서는 다음만 사용한다.
-
-    project-root/
-    ├─ CLAUDE.md                  # 전역 템플릿에서 복사/동기화
-    └─ .claude/
-       ├─ docs/                   # 프로젝트별 정책 전용 (전역 하니스가 쓰지 않음)
-       ├─ state/
-       ├─ workflow/
-       └─ logs/
+- 현재 상태 스냅샷
+- artifact / evidence / trace 저장
+- validation / hook / stop reason 로그 축적
 
 ---
 
-## 5. AGENTS.md / CLAUDE.md 설계 원칙
+## 6. 새 워크플로 구조
 
-이 문서는 **하니스 본체가 아니라 진입 문서**다.
+기존:
+- planning
+- reviewing
+- implementation-design
+- implementation-review
+- implementing
+- final-review
 
-반드시 포함할 것:
-- 정식 시작 경로
-- `start-task` 실행 규칙
-- worktree 필요 조건
-- control-flow 우선 원칙
-- 빠른 참조 표
-- 금지 행동 목록
-- hook 위반 시 기대 동작
+v3:
+- planning_pending
+- plan_ready_for_review
+- build_pending
+- build_ready_for_review
+- validation_pending
+- final_review_pending
+- completed
 
-포함하지 않을 것:
-- state schema 전체
-- evidence source mapping 전체
-- controller의 세부 전이 규칙 전체
-- 각 skill의 긴 전문 지시
+단, 내부 의미는 다음처럼 재해석한다.
 
-즉, `AGENTS.md`는 짧고 강해야 하며, “이 문서 하나로 모든 정책을 설명”하려고 하면 안 된다.
+### 단계 1. planning_pending
+- controller가 PO를 호출
+- PO가 다음을 작성
+  - `spec.md`
+  - `plan.md`
+  - `acceptance.md` 초안
+  - 필요 시 `research.md`
+
+### 단계 2. plan_ready_for_review
+- reviewer가 plan review 수행
+- verdict:
+  - approved
+  - rejected
+  - approved_with_revisions
+
+### 단계 3. build_pending
+- 승인된 plan 기준으로 PO가 design + implementation 수행
+- 필요 시 spec refinement는 가능하지만 scope_fingerprint 변경 금지
+- scope가 바뀌면 stale 처리 후 stop
+
+### 단계 4. build_ready_for_review
+- reviewer가 result review 수행
+- UI/UX / behavior / code / artifact completeness 검토
+- 필요 시 bounded revision 요청
+
+### 단계 5. validation_pending
+- validation script 실행
+- acceptance 기준 충족 여부 확인
+- validation summary 저장
+- controller가 completion 가능 여부 판정
+
+### 단계 6. final_review_pending
+- 최종 승인
+- persistence flow 진입 여부 판단
+
+### 단계 7. completed
+- 코드 작업 완료
+- 필요 시 persistence flow 별도 진행
 
 ---
 
-## 6. 스킬/서브에이전트 간결화 정책
+## 7. Artifact 구조 재정의
 
-### 목표
-모든 skill/subagent 문서를 **100줄 이내 목표**로 압축한다.
+feature 단위 기본 artifact는 다음으로 정리한다.
 
-### 표준 구조
-각 skill/subagent는 아래 5개 블록만 유지한다.
+- `spec.md`
+- `plan.md`
+- `acceptance.md`
+- `review-plan.md`
+- `build-summary.md`
+- `review-result.md`
+- `validation-summary.json`
+
+필요 시:
+- `research.md`
+- `worklog.md`
+- `save-docs.md`
+
+### 핵심 원칙
+- spec와 acceptance는 plan 단계의 정식 artifact다
+- result review는 build 결과를 기준으로 수행한다
+- validation은 acceptance를 기준으로만 판정한다
+- reviewer가 새로운 요구사항을 발명하면 안 된다
+
+---
+
+## 8. Acceptance와 Test RED 정책
+
+v3에서는 Test RED를 무조건 먼저 두지 않는다.  
+다음 순서를 따른다.
+
+1. spec / plan / acceptance 초안 생성
+2. reviewer가 acceptance 적절성 검토
+3. acceptance freeze
+4. 그 다음에만 test scaffold 또는 validation script 작성 허용
+
+즉:
+
+**acceptance 없는 test-first는 금지**  
+**acceptance freeze 이후의 test-first는 허용**
+
+초기에는 tester를 별도 agent로 두지 않고,
+- `validate-task.*`
+- validation summary schema
+- acceptance linkage
+를 먼저 구축한다.
+
+tester 추가는 이후 단계에서 검토한다.
+
+---
+
+## 9. Skill / Agent 문서 구조 재편
+
+### 유지 대상
+- `controller`
+- `po`
+- `reviewer`
+- `control-flow`
+- `reviewing`
+- `po`
+- 필요 시 `worklog-update`, `plan-save`, `save-docs`
+
+### 정리 대상
+아래는 외부 specialist로서 폐기 또는 흡수한다.
+- `planner`
+- `implementation-designer`
+- `implementer`
+
+### 문서 구조 원칙
+각 agent/skill 문서는 아래 5개 블록만 유지한다.
 
 1. 목적
 2. 해야 할 일
@@ -314,287 +438,232 @@ hook 동작 방식:
 5. 참조 문서
 
 ### 분리 원칙
-아래는 skill 내부에 길게 쓰지 않는다.
+다음은 전부 `docs/`로 이동한다.
 - 상태기계 상세
 - evidence 판정표
-- 예외 케이스 전체 목록
-- 정책 충돌 해설
-- 테스트 시나리오 본문
-
-이런 내용은 `docs/`로 이동한다.
-
-### 추가 제안
-`POLICY_INDEX.md` 또는 `POLICY_INDEX.json`을 별도로 둔다.
-
-역할:
-- 정책 이름
-- canonical 경로
-- override 가능 여부
-- global / local precedence
-- consumer (`controller`, `hook`, `reviewer` 등)
-
-이 파일이 있으면 각 skill이 “무슨 문서를 참조해야 하는지”를 길게 설명할 필요가 줄어든다.
+- stale invalidation 해설
+- 예외 케이스 모음
+- 평가 시나리오 본문
 
 ---
 
-## 7. hook 설계 원칙
+## 10. Hook / Enforcement 정책
 
-### 7-1. hook의 역할
-hook은 좋은 습관을 권고하는 문서가 아니라, **정식 경로 우회를 차단하는 enforcement 계층**이다.
+우선순위 높은 hook은 아래처럼 재정의한다.
 
-### 7-2. 도입 대상
-우선순위가 높은 hook은 다음이다.
+### 10-1. pre-po guard
+차단 조건:
+- bootstrap 없이 바로 생산 시작
+- planning artifact 없이 build 단계 진입
 
-#### worktree guard
-- 병렬/격리 작업인데 worktree 없음
-- task bootstrap 없이 바로 구현 시도
+### 10-2. pre-review guard
+차단 조건:
+- review 대상 artifact 없음
+- read ledger / trace 누락
+- stale scope에서 review 강행
 
-#### pre-implement guard
-- approved plan / implementation-design 없이 구현 단계 진입
-
-#### pre-complete guard
+### 10-3. pre-complete guard
+차단 조건:
 - validation summary 없음
 - final review 없음
-- required artifacts 없음
+- required artifact 누락
 
-#### policy guard
-- 필수 정책 문서 미해결
-- stale state인데 계속 진행
-- 금지 경로 우회
+### 10-4. policy guard
+차단 조건:
+- stale state 지속 사용
+- human gate required 무시
+- 금지 경로 직접 쓰기
+- 로컬 `.claude/docs` 오염 시도
 
-### 7-3. feedback 방식
-hook은 단순 실패로 끝나지 않고 아래를 남긴다.
+### feedback 원칙
+모든 hook은 아래를 남긴다.
 - 위반 코드
 - 위반 설명
 - 수정 경로
 - 권장 재실행 명령
-- 관련 log ref
-
-### 7-4. severity 체계
-- `warn`: 기록만 하고 진행 허용
-- `block`: 즉시 차단
-- `repairable`: 차단 후 정상 경로 안내
-- `auto-retry`: 차단 후 control-flow 재진입 유도
+- log ref
 
 ---
 
-## 8. 로그 계층 설계
+## 11. State / Logs 연결 구조
 
-### 8-1. 결론
-로그는 도입한다.  
-하지만 **state를 대체하지 않는다.**
+### state
+- 현재 단계
+- 현재 feature slug
+- scope_fingerprint
+- latest accepted artifact ref
+- pending review 여부
+- stale 여부
+- human gate 여부
+- last validation summary ref
+- last hook feedback ref
 
-### 이유
-state는 현재 상태를 한 번에 읽을 수 있는 정규화 스냅샷이다.  
-logs는 시간순 append-only 기록이다.  
-controller가 logs만 보고 다음 단계를 판정하면:
-- 비용이 크고
-- 판정이 비결정적이고
-- 중간 노이즈에 취약하고
-- 현재까지 만든 state/evidence 구조를 약화시킨다
+### logs
+- `events.ndjson`
+- `tool-usage.ndjson`
+- `validation.json`
+- `artifacts-manifest.json`
+- `self-feedback.json`
 
-따라서:
-- **controller는 state를 canonical source로 사용**
-- **logs는 evidence / self-feedback / audit / recovery 보조로 사용**
-
-이 구조가 더 낫다.
-
-### 8-2. 로그 종류
-`.claude/logs/<task>/` 아래에 다음을 둔다.
-
-- `events.ndjson`  
-  단계 진입/종료, hook 발화, retry, stop reason
-
-- `tool-usage.ndjson`  
-  주요 read/write/validation/tool 호출 요약
-
-- `validation.json`  
-  테스트/빌드/린트/검증 결과 요약
-
-- `artifacts-manifest.json`  
-  생성된 artifact, state, evidence, trace 경로 목록
-
-- `self-feedback.json`  
-  hook 또는 controller가 남긴 보정 피드백
-
-- `screenshots/`  
-  웹 UI 검증 시 캡처
-
-- `db/`  
-  DB schema diff, migration 상태, 쿼리 결과 스냅샷
-
-### 조건부 생성 원칙
-웹/DB 관련 로그는 항상 강제가 아니라, **관련 작업일 때만 생성**한다.  
-전역 하니스는 capture capability를 제공하되, 모든 프로젝트에 무조건 적용하지 않는다.
-
-### 8-3. state와 log 연결
-state에는 로그 전체를 넣지 않고, 필요한 ref만 넣는다.  
-예:
-- `last_validation_summary.ref`
-- `last_hook_feedback_ref`
-- `last_execution_log_ref`
-
-즉 state는 요약, logs는 원본이다.
-
-### 8-4. 추가 제안: recovery mode
-state가 없거나 손상된 경우에만 controller가 logs를 이용해 복구용 summary를 만들 수 있도록 한다.  
-단, 이건 정상 경로가 아니라 **fallback recovery**로만 둔다.
+### 원칙
+- controller는 state만으로 다음 단계를 판정 가능해야 한다
+- logs는 recovery / audit / debugging / evidence 보조용이다
+- logs 기반 next-step 판정은 금지
 
 ---
 
-## 9. 로컬/전역 경계 정책
+## 12. 병렬 확장과의 관계
 
-이 항목은 매우 중요하다.
+v3는 병렬 로드맵을 버리지 않는다.  
+오히려 병렬 확장의 **lane 내부 실행 단위**를 더 단순하게 만든다.
 
-### 전역 하니스가 관리하는 것
-- 전역 policy docs
-- 전역 skills/subagents
-- bootstrap scripts
-- hooks
-- 템플릿 `CLAUDE.md`
-- state/workflow/log runtime 구조
+### 병렬 확장 시 구조
+- 중앙: `controller`
+- lane 내부 생산: `PO`
+- lane 내부 검토: `reviewer`
 
-### 로컬 프로젝트가 관리하는 것
-- 프로젝트 특화 정책 문서
-- stack-specific 추가 규칙
-- UI/DB/배포/도메인 정책
-- 프로젝트 전용 skills/docs
+즉, 병렬화되더라도 각 lane는 별도 planner/designer/implementer를 두지 않고,  
+**lane별 PO + reviewer** 구조로 굴린다.
 
-### 금지 규칙
-전역 하니스는 로컬 `.claude/docs`에 기본 정책 파일이나 workflow 문서를 생성하지 않는다.
+중앙 세션 책임은 유지한다.
 
-이 경로는 **오직 프로젝트 특화 정책**을 위해 남겨둔다.
+- 전역 범위 정의
+- shared contract 확정
+- work package 분해
+- lane brief 생성
+- 결과 통합
+- 충돌 판정
+- reroute / final decision
 
-### override 규칙
-문서 해석 우선순위는 다음과 같이 둔다.
+### 병렬 금지 조건
+다음은 유지한다.
+- 공통 계약 미확정
+- 대부분의 세션이 같은 파일 수정
+- 대규모 refactor
+- global test 하나에만 의존
+- 하나의 설계 선택에 전체가 종속
 
-1. 로컬 `.claude/docs/*`
-2. 전역 `docs/*`
-
-이렇게 해야 전역 골격은 유지하면서도 프로젝트별 확장이 가능하다.
-
----
-
-## 10. 실행 흐름 초안
-
-### 1단계. bootstrap
-`start-task.sh` 또는 `start-task.ps1` 실행
-
-이 스크립트는:
-- task slug 생성
-- worktree 준비
-- `.claude/state/<task>.json` 초기화
-- `.claude/workflow/<task>/...` 디렉터리 생성
-- `.claude/logs/<task>/...` 디렉터리 생성
-- 로컬 루트 `CLAUDE.md` 템플릿 배치/동기화
-- EXEC_PLAN 또는 equivalent starter artifact 생성
-
-### 2단계. control-flow 진입
-bootstrap 결과를 기반으로 `control-flow`가 현재 state를 읽고 다음 합법 단계를 고른다.
-
-### 3단계. specialist 실행
-- planning
-- reviewing
-- implementation-design
-- implementation-review
-- implementing
-- 필요 시 docs/worklog
-
-각 단계는 control-flow가 호출한다.
-
-### 4단계. validation
-검증 script와 evaluation 기준을 적용한다.
-
-### 5단계. completion
-final review 승인과 validation 완료 후에만 완료 처리한다.
-
-### 6단계. persistence
-docs/worklog/save-docs는 별도 persistence flow로 처리한다.
-
-이 구조는 기존 로드맵의 delivery flow와 persistence flow 분리 원칙과 일치한다.
+즉, PO 구조는 병렬성의 대체물이 아니라 **lane 내부 단순화 도구**다.
 
 ---
 
-## 11. 향후 병렬 확장과의 연결
+## 13. 단계별 추진 계획
 
-이 하이브리드 구조는 병렬 확장과도 충돌하지 않는다.  
-오히려 병렬 구조의 기반이 된다.
-
-병렬 확장 시:
-- `start-task`는 `start-package` 또는 lane bootstrap으로 확장
-- `controller`는 중앙 controller + lane-local controller로 분화
-- `state`는 program/package/lane state로 확장
-- `logs`는 lane별로 분리
-- hook은 lane 범위 위반과 shared contract 위반 감지에 활용
-
-병렬 확장 로드맵도 중앙 세션과 개별 세션의 책임 분리, 병렬 적합성 판정, lane state persistence, parallel evaluation harness를 요구하므로, 지금 구조를 얇은 진입 문서 + 강제 계층 + 상태기반 orchestration으로 정리하는 것이 선행 조건에 맞다.
-
----
-
-## 12. 단계별 추진 계획
-
-### 마일스톤 1. Entry / Enforcement Layer 도입
-- `AGENTS.md` 작성
-- `templates/CLAUDE.md` 작성
-- `start-task.sh`, `start-task.ps1` 작성
-- 최소 hook 2개 도입
-- `.claude/logs/` 구조 도입
+## 마일스톤 1. Specialist 구조 재편
+포함:
+- `planner`, `implementation-designer`, `implementer` 역할 정리
+- `po.md` 초안 작성
+- `po/SKILL.md` 초안 작성
+- 기존 production skill의 참조 경로 정리
 
 완료 기준:
-- 모든 작업의 정식 시작 경로가 문서/스크립트로 보임
-- 전역 하니스가 로컬 `.claude/docs`를 건드리지 않음
-- worktree / bootstrap 없는 직접 구현 경로를 차단할 수 있음
-
-### 마일스톤 2. Skill/Subagent Slimming
-- planning/reviewing 등 기존 skill 정리
-- 각 문서를 100줄 이내 목표로 압축
-- 세부 규칙은 docs로 이동
-- `POLICY_INDEX` 추가
-
-완료 기준:
-- skill/subagent 문서가 짧고 일관됨
-- 중복 정책 서술이 줄어듦
-
-### 마일스톤 3. State + Logs 연결
-- controller가 state를 canonical source로 유지
-- logs ref를 state에 연결
-- hook feedback과 validation 결과를 logs에 남김
-- recovery mode 초안 작성
-
-완료 기준:
-- state는 요약 스냅샷, logs는 과정 증거로 역할 분리
-- self-feedback 기반 재진입이 가능
-
-### 마일스톤 4. Evaluation 보강
-- hook 위반, bootstrap 우회, worktree 위반, validation 누락 시나리오 추가
-- 기존 happy path / Q1 / Q2 / Q3 검증 유지
-
-완료 기준:
-- 문서뿐 아니라 enforcement 계층도 회귀 검증 가능
-
-### 마일스톤 5. 병렬 확장 준비
-- 중앙/개별 세션 책임 분리 문서 초안
-- lane bootstrap 규칙 초안
-- package state/log 구조 초안
-
-완료 기준:
-- 단일 하니스 위에 병렬 확장 설계를 얹을 준비 완료
+- 생산 계층이 `PO` 단일 role로 설명 가능
+- controller / reviewer와 책임 경계가 명확
+- 기존 문서 중 역할 중복이 제거됨
 
 ---
 
-## 13. 최종 권고
+## 마일스톤 2. Workflow 재정의
+포함:
+- state machine 단계명 재정리
+- `planning_pending → plan_ready_for_review → build_pending → build_ready_for_review → validation_pending → final_review_pending → completed`
+- artifact naming 규칙 재정리
+- acceptance artifact 정규화
 
-이 초안의 핵심은 세 가지다.
+완료 기준:
+- controller가 새 state 구조로 단계 판정 가능
+- reviewer가 plan review와 result review를 분리 수행 가능
 
-1. **기존 orchestration 구조는 유지한다.**  
-   `control-flow`, `controller`, `planning`, `reviewing`, `implementation-design`, `implementation-review`, `implementing`은 그대로 간다.
+---
 
-2. **전문가 하니스의 강점은 상단 계층으로 흡수한다.**  
-   `AGENTS/CLAUDE 진입 문서`, `bootstrap script`, `hook enforcement`, `빠른 참조`, `append-only logs`를 추가한다.
+## 마일스톤 3. Operational Shell 유지 및 보강
+포함:
+- `AGENTS.md`
+- `templates/CLAUDE.md`
+- bootstrap script
+- hook 2~4개 도입
+- logs 구조 유지
 
-3. **logs는 state를 대체하지 않는다.**  
-   state는 canonical snapshot, logs는 evidence trail이다.
+완료 기준:
+- PO 구조로 바뀌어도 정식 진입 경로와 enforcement 계층이 유지됨
+- bootstrap 우회와 validation 없는 completion이 차단됨
 
-이 방향이 현재 로드맵의 controller/state/evaluation 목표를 훼손하지 않으면서, 다른 하니스의 운영 강제력과 사용성을 가장 현실적으로 흡수하는 방법이다.
+---
 
-이 초안은 Claude에게 전역 하니스 수정 지시를 내릴 때 바로 기준 문서로 써도 무방하다.
+## 마일스톤 4. Validation Hardening
+포함:
+- `acceptance.md` 규격 강화
+- `validate-task.*` 정리
+- validation summary schema 확정
+- acceptance freeze 규칙 문서화
+
+완료 기준:
+- 결과 완료 판정이 reviewer 의견만이 아니라 validation summary에도 연결됨
+- test-first는 acceptance 이후만 허용됨
+
+---
+
+## 마일스톤 5. Evaluation Harness 업데이트
+포함:
+- PO 구조 기준 happy path
+- plan rejection
+- result rejection
+- stale approval
+- human gate
+- bootstrap bypass
+- validation missing
+- bounded self-refine 1회 성공 / 실패
+
+완료 기준:
+- 기존 평가 체계가 새 역할 구조에서도 회귀 가능
+- “전문 specialist 축소 후에도 통제력이 유지되는가”를 검증 가능
+
+---
+
+## 마일스톤 6. Parallel Readiness
+포함:
+- lane brief 템플릿 재정리
+- lane 내부 역할을 PO + reviewer로 표준화
+- integration controller 문서와 연결
+- package state 확장 설계 반영
+
+완료 기준:
+- 병렬 세션에서도 역할 분해가 과도해지지 않음
+- 중앙 controller와 lane-local 생산 구조의 경계가 명확
+
+---
+
+## 14. 도입 금지 항목
+
+다음은 당분간 도입하지 않는다.
+
+- controller 제거
+- reviewer에게 state 판정 권한 부여
+- PO self-approval 허용
+- logs 기반 next-step 판정
+- planner / designer / implementer 분할 복귀
+- annotator 도입
+- multi-platform abstraction
+- full parallel worktree execution
+- security specialist 조기 도입
+
+---
+
+## 15. 최종 판단
+
+v3의 핵심은 단순하다.
+
+**생산은 덜 쪼개고, 제어는 더 명확히 한다.**
+
+즉,
+- 사람 팀처럼 많은 역할로 나누는 방식은 생산 계층에서 줄인다
+- 대신 controller가 다음 단계와 stop 조건을 더 강하게 잡는다
+- reviewer는 독립된 비판 축으로 남긴다
+
+이렇게 하면,
+- handoff 비용은 줄고
+- 맥락은 더 길게 유지되며
+- 기존 하니스의 강점인 state machine, evidence trail, human gate는 그대로 남는다
+
+이 구조는 현재 하니스의 control-first 철학과 충돌하지 않는다.  
+오히려 그 철학을 유지한 채 생산 계층만 AI 친화적으로 단순화하는 방향이다.
