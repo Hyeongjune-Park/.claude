@@ -31,7 +31,8 @@ status: active
 - `approved_with_revisions`만 bounded retry 후보다
 - `not_approved`는 자동 재시도하지 않는다
 - pending state라고 해서 항상 자동 진행하는 것은 아니다
-- 현재 read 정책은 `warning` 모드다
+- Q1(missing required targets)와 Q2(bound violation)는 `evidence_status: failed`를 발생시키고 workflow를 차단한다
+- Q3(self-report vs observed 불일치)는 warning으로 기록하되 차단하지 않는다
 
 ## canonical 저장 위치
 
@@ -223,25 +224,27 @@ status: active
 - 승인 기반 artifact와 현재 artifact가 같은 scope로 설명되지 않음
 - accepted artifact를 전제로 한 계약이 뒤집힘
 
-## warning 모드 규칙
+## evidence 정책 규칙
 
-아래는 우선 warning으로 기록한다.
-- `required_read_targets` 누락 의심
-- `allowed_direct_reads` 밖 읽기 의심
-- self-report와 observed read trace 불일치
+### Q1 / Q2 — 차단 조건
 
-warning만으로는 아래 전이를 자동 차단하지 않는다.
-- `plan_ready_for_review` → review 실행
-- `implementation_design_ready_for_review` → review 실행
-- `final_review_pending` → review 실행
+아래는 `evidence_status: failed`를 발생시키고 workflow 전이를 차단한다.
+- Q1: `observed_direct_reads_used`에서 `required_read_targets` 누락 (missing required targets)
+- Q2: `observed_direct_reads_used`가 `allowed_direct_reads` 밖 항목을 포함 (bound violation)
 
-자동 차단은 아래에 한정한다.
+### Q3 — warning 조건
+
+아래는 warning으로 기록하되 workflow를 차단하지 않는다.
+- Q3: self-report(`direct_reads_used`)와 observed read trace 불일치
+
+### 자동 차단 조건 (전체)
+
 - malformed artifact
 - 필수 contracts 누락
 - `human_input_required: true`
 - stale approval
 - specialist가 `status: blocked`
-- `evidence_status: failed`
+- `evidence_status: failed` (Q1 또는 Q2 해당 시)
 
 ## persistence invariant
 

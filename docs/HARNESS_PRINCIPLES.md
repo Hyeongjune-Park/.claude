@@ -89,11 +89,11 @@ reviewer는 이 범위를 넘겨 직접 읽기를 주장하면 안 된다.
 - `Inferred`
 - `Unverified`
 
-현재 read 정책은 `warning` 모드다.
-- self-report는 유지한다.
-- orchestration layer는 가능하면 observed `read trace`도 남긴다.
-- self-report와 observed trace가 어긋나면 warning으로 기록한다.
-- warning만으로는 자동 차단하지 않는다.
+evidence 판정 정책:
+- Q1(missing required targets)와 Q2(bound violation): `evidence_status: failed` — workflow 차단
+- Q3(self-report vs observed trace 불일치): warning으로 기록하되 차단하지 않는다
+- orchestration layer는 반드시 observed `read trace`를 남긴다
+- evidence 필드(required_read_targets, allowed_direct_reads, missing_read_targets, evidence_status, evidence_warnings)는 control-flow가 ledger/trace 기반으로 계산한다. reviewer가 제공해도 무시한다.
 
 ## 8. policy resolution은 단일 출처여야 한다
 
@@ -106,19 +106,22 @@ reviewer는 이 범위를 넘겨 직접 읽기를 주장하면 안 된다.
 
 ## 9. review는 slot-based 형식을 유지한다
 
-review artifact metadata는 최소한 아래 항목을 가진다.
+reviewer가 반환하는 metadata 필수 항목 (reviewer 책임):
 - `artifact_under_review`
 - `read_ledger_ref`
+- `direct_reads_used` (self-report — 실제로 읽은 파일 목록)
+- `verdict`
+- `revision_class`, `revision_scope_preserved`, `auto_fix_allowed`
+- `required_revisions`, `forbidden_changes`, `revision_target_stage`
+
+control-flow가 계산하여 채우는 항목 (reviewer가 제공해도 무시):
 - `required_read_targets`
 - `allowed_direct_reads`
-- `direct_reads_used`
 - `missing_read_targets`
-- `evidence_policy_mode`
 - `evidence_status`
 - `evidence_warnings`
-- `verdict`
 
-사람용 review 본문도 위와 같은 정보를 명시적으로 요약해야 한다.
+사람용 review 본문은 verdict, direct_reads_used, 주요 판단 근거를 명시적으로 요약해야 한다.
 
 ## 10. false continuation보다 stop을 우선하되, warning 모드는 과잉 차단하지 않는다
 
@@ -133,13 +136,13 @@ review artifact metadata는 최소한 아래 항목을 가진다.
 - 다음 합법 단계를 안전하게 고를 수 없음
 - specialist가 명시적으로 `status: blocked`
 - `evidence_status: failed`
+- Q1: `missing_read_targets`가 비어 있지 않음 (필수 읽기 대상 누락)
+- Q2: review artifact가 `allowed_direct_reads` 밖 대상을 직접 읽었다고 주장함 (bound violation)
 
 아래 상황은 현재 warning으로 기록한다.
-- review artifact가 허용된 직접 읽기 범위를 넘긴 것으로 보고됨
-- `missing_read_targets`가 비어 있지 않음
-- self-report와 observed trace 불일치
+- Q3: self-report와 observed trace 불일치
 
-warning은 evidence와 state에 남기되, 현재 단계에서는 자동 차단 사유로 바로 승격하지 않는다.
+warning은 evidence와 state에 남기되, Q3만 해당하는 경우에는 자동 차단 사유로 승격하지 않는다.
 
 ## 11. specialist stage는 좁게 유지한다
 
@@ -158,7 +161,7 @@ warning은 evidence와 state에 남기되, 현재 단계에서는 자동 차단 
 - state-authoritative
 - root-disciplined
 - evidence-aware
-- warning-tolerant
+- Q3-warning-tolerant (Q1/Q2는 차단, Q3만 경고 허용)
 - policy-consistent
 - stoppable
 - role-separated

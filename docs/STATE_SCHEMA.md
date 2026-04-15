@@ -309,3 +309,8 @@ review가 아직 없으면 `null`
 5. bounded retry 중이면 `revision_request.active == true`
 6. 승인되지 않은 최신 artifact가 생겨도 `accepted_artifacts`를 덮어쓰지 않는다
 7. final review 승인 전에는 `accepted_artifacts.implementation == null`
+8. `review_inputs.<stage>.allowed_direct_reads`는 해당 read ledger의 `allowed_direct_reads`와 정확히 일치한다 (count + content 모두)
+9. state 파일은 carry-forward 방식으로만 갱신한다. 기존 필드를 비우거나 처음부터 재구성하지 않는다
+10. `last_review_evidence.allowed_direct_reads`는 reviewer 출력이 아니라 read ledger에서 직접 가져온다
+11. specialist 반환 metadata에서 타입 오류(예: 문자열 `"null"`)가 교정된 경우 교정 사실을 `evidence_warnings`에 기록한다
+12. `review_inputs.<stage>.ref`가 null이 아니면 `required_read_targets`와 `allowed_direct_reads`는 빈 배열이어선 안 된다 (ref 있고 배열 비어있으면 invalid state)

@@ -21,3 +21,18 @@ caller는 아래를 제공해야 한다.
 - `required_read_targets`
 - `allowed_direct_reads`
 - `policy_resolution_ref`
+
+## 반환 필드 책임
+
+reviewer가 반환하는 metadata에서 유효한 필드:
+- `verdict` (approved / approved_with_revisions / not_approved)
+- `direct_reads_used` (실제로 읽은 파일 목록 — self-report)
+- `revision_class`, `revision_scope_preserved`, `auto_fix_allowed`
+- `required_revisions`, `forbidden_changes`, `revision_target_stage`
+
+아래 필드는 reviewer가 계산하거나 채우지 않는다. control-flow가 ledger/trace 기반으로 직접 계산한다.
+- `required_read_targets`
+- `allowed_direct_reads`
+- `missing_read_targets`
+- `evidence_status`
+- `evidence_warnings`

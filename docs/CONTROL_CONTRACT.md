@@ -220,8 +220,11 @@ stage별 자동 수정 한도를 뜻한다.
 
 사용 규칙:
 - non-review stage는 `not_applicable`
-- review stage에서 read 관련 경고가 있으면 `warning`
-- review 자체가 성립하지 않으면 `failed`
+- review stage에서 Q1(missing required targets) 또는 Q2(bound violation)가 있으면 `failed` → workflow 차단
+- review stage에서 Q3(self-report vs observed 불일치)만 있으면 `warning` → workflow 계속 가능
+- 이상 없으면 `passed`
+
+이 필드는 control-flow가 ledger와 read trace 기반으로 계산한다. reviewer가 설정하면 안 된다.
 
 ## stage별 최소 규칙
 
@@ -246,7 +249,7 @@ stage별 자동 수정 한도를 뜻한다.
 
 ### `implementation_review`
 - `verdict`는 `approved`, `approved_with_revisions`, `not_approved` 중 하나
-- `approved`면 `next_allowed: implementing`ㅉ
+- `approved`면 `next_allowed: implementing`
 - `approved_with_revisions`면 `next_allowed: implementation_design`
 - `not_approved`면 `next_allowed: implementation_design`
 - `artifact_under_review`는 implementation-design artifact 경로

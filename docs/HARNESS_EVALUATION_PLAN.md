@@ -81,6 +81,35 @@ review 단계에서 `read ledger` 없이 reviewer를 호출하면 안 된다.
 implementation artifact는 있어도 review 가능한 validation evidence가 없으면 `final_review`를 돌리면 안 된다.
 - 기대: `final_review_pending`에서 stop
 
+### 11. Malformed specialist output
+specialist가 malformed artifact를 반환하면 workflow가 차단되어야 하고, raw output이 보존되어야 한다.
+- 기대: workflow 전이 차단, `evidence/malformed-<stage>-<timestamp>.json` 생성, state에 `blocker_present: true`
+- 금지: malformed body가 artifact canonical path에 저장됨, workflow가 다음 단계로 진행됨
+
+### 12. Reviewer evidence field pollution
+reviewer metadata에 `evidence_status`, `missing_read_targets`, `required_read_targets`, `allowed_direct_reads`가 포함되어 있을 때, control-flow는 그 값을 무시하고 ledger/trace 기반으로 직접 계산해야 한다.
+- 기대: control-flow 계산 결과가 state에 기록됨, reviewer 제공 evidence 필드는 무시됨
+- 금지: reviewer가 제공한 `evidence_status` 또는 `allowed_direct_reads`가 state에 그대로 저장됨
+
+### 13. review_inputs 축소 감지
+state의 `review_inputs.<stage>.allowed_direct_reads`가 ledger의 `allowed_direct_reads`보다 적을 경우 invariant 위반으로 탐지해야 한다.
+- 기대: `state.review_inputs.<stage>.allowed_direct_reads == ledger.allowed_direct_reads` (count + content 정확히 일치)
+- 금지: 축소된 allowed_direct_reads로 review 단계 진행
+
+### 14. carry-forward integrity
+review 단계 완료 후 다음 전이에서 `review_inputs.<stage>` 값이 비워지지 않아야 한다.
+- 검증 방법: reviewing 완료 → implementation_design 전이 후에도 `review_inputs.reviewing.allowed_direct_reads`가 원래 값과 동일하게 남아 있어야 한다
+- 기대: 이후 state 쓰기에서 review_inputs 값이 유지됨
+- 금지: review_inputs 배열이 이후 전이에서 `[]`로 비워짐
+
+### 15. field equality — ledger / trace / state 삼중 정렬
+review 완료 후 아래 세 출처의 `allowed_direct_reads`가 정확히 동일해야 한다.
+- `ledger.allowed_direct_reads`
+- `state.review_inputs.<stage>.allowed_direct_reads`
+- `state.last_review_evidence.allowed_direct_reads`
+- 기대: 세 값이 count + content 모두 일치
+- 금지: reviewer 출력 값이 ledger와 다른데 state에 그대로 저장됨
+
 ## 완료 기준
 
 최소한 아래를 반복 재현할 수 있어야 한다.
