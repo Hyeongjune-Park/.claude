@@ -3,7 +3,7 @@
 #
 # 역할:
 #   - state 파일 존재 및 정합성 확인
-#   - 필수 artifact 존재 확인 (plan, acceptance, build-summary, review-result, review-final)
+#   - 필수 artifact 존재 확인 (plan, review-plan, acceptance, build-summary, review-result)
 #   - acceptance.md 존재 확인 (validation은 acceptance 기준으로만 판정)
 #   - 위반 시 상세 피드백 출력
 #
@@ -83,8 +83,7 @@ $RequiredArtifacts = @(
     "artifacts\review-plan.md",
     "artifacts\acceptance.md",
     "artifacts\build-summary.md",
-    "artifacts\review-result.md",
-    "artifacts\review-final.md"
+    "artifacts\review-result.md"
 )
 
 foreach ($artifact in $RequiredArtifacts) {
@@ -114,6 +113,20 @@ Write-Host "[validate-task] 결과 요약"
 Write-Host "  오류  : $Errors"
 Write-Host "  경고  : $Warnings"
 Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+$Result = if ($Errors -gt 0) { "fail" } elseif ($Warnings -gt 0) { "pass_with_warn" } else { "pass" }
+
+# --- machine-readable summary (stdout JSON) ---
+# control-flow는 이 JSON 줄을 파싱해 evidence/validation-summary-<timestamp>.json을 작성한다.
+
+$GeneratedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+$ArtifactList = ($RequiredArtifacts | ForEach-Object { '"' + $_.Replace('\','/') + '"' }) -join ","
+
+$WorkflowStateVal = if ($StateContent -match '"workflow_state"\s*:\s*"([^"]+)"') { $Matches[1] } else { "unknown" }
+
+Write-Host ""
+Write-Host "VALIDATION_SUMMARY_JSON"
+Write-Host "{`"result`":`"$Result`",`"errors`":$Errors,`"warnings`":$Warnings,`"checked_artifacts`":[$ArtifactList],`"workflow_state`":`"$WorkflowStateVal`",`"task_slug`":`"$TaskSlug`",`"generated_at`":`"$GeneratedAt`"}"
 
 if ($Errors -gt 0) {
     Write-Host "[FAIL] 필수 조건 미충족. 위 오류를 해결 후 재시도하세요."

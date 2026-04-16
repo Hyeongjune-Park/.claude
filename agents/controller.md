@@ -111,7 +111,7 @@ state 파일과 workflow artifact가 모두 없으면:
 - specialist가 `status: blocked`로 반환함
 - `evidence_status: failed`
 - review `not_approved` 후 pending state에 진입함
-- validation `failed` 후 build_pending으로 전환됨
+- validation result `fail` 후 build_pending으로 전환됨
 - bounded retry 조건을 만족하지 않는 `approved_with_revisions` 결과가 들어옴
 
 ## 출력 형식
@@ -141,6 +141,6 @@ state 파일과 workflow artifact가 모두 없으면:
 - review approved 후 pending → 계속
 - review revision requested 후 pending → 1회만 계속
 - review not approved 후 pending → stop
-- validation passed → 계속
-- validation failed → stop
+- validation result pass / pass_with_warn → 계속
+- validation result fail → stop
 - internal precondition missing → `control-flow`가 먼저 repair

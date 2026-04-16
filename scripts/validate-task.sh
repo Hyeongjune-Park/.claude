@@ -4,7 +4,7 @@
 #
 # 역할:
 #   - state 파일 존재 및 정합성 확인
-#   - 필수 artifact 존재 확인 (plan, acceptance, build-summary, review-result, review-final)
+#   - 필수 artifact 존재 확인 (plan, review-plan, acceptance, build-summary, review-result)
 #   - acceptance.md 존재 확인 (validation은 acceptance 기준으로만 판정)
 #   - 위반 시 상세 피드백 출력
 #
@@ -90,7 +90,6 @@ REQUIRED_ARTIFACTS=(
   "artifacts/acceptance.md"
   "artifacts/build-summary.md"
   "artifacts/review-result.md"
-  "artifacts/review-final.md"
 )
 
 for artifact in "${REQUIRED_ARTIFACTS[@]}"; do
@@ -122,9 +121,28 @@ echo "  경고  : $WARNINGS"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 if [[ $ERRORS -gt 0 ]]; then
+  RESULT="fail"
+elif [[ $WARNINGS -gt 0 ]]; then
+  RESULT="pass_with_warn"
+else
+  RESULT="pass"
+fi
+
+# --- machine-readable summary (stdout JSON) ---
+# control-flow는 이 JSON 줄을 파싱해 evidence/validation-summary-<timestamp>.json을 작성한다.
+
+GENERATED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "unknown")"
+
+echo ""
+echo "VALIDATION_SUMMARY_JSON"
+cat <<EOF
+{"result":"$RESULT","errors":$ERRORS,"warnings":$WARNINGS,"checked_artifacts":$(printf '%s\n' "${REQUIRED_ARTIFACTS[@]}" | jq -R . | jq -sc . 2>/dev/null || echo "[]"),"workflow_state":"${WORKFLOW_STATE:-unknown}","task_slug":"$TASK_SLUG","generated_at":"$GENERATED_AT"}
+EOF
+
+if [[ "$RESULT" == "fail" ]]; then
   echo "[FAIL] 필수 조건 미충족. 위 오류를 해결 후 재시도하세요."
   exit 1
-elif [[ $WARNINGS -gt 0 ]]; then
+elif [[ "$RESULT" == "pass_with_warn" ]]; then
   echo "[PASS with WARN] 검증 통과 (경고 있음)."
   exit 0
 else

@@ -84,12 +84,14 @@ stage별 매핑:
 
 0. `artifacts/acceptance.md` 존재 확인 — 없으면 즉시 `blocked` 처리하고 stop
 1. `validate-task.sh` (Unix) 또는 `validate-task.ps1` (Windows) 실행
-2. 실행 결과(exit code, output)를 수집한다
-3. validation summary를 `evidence/validation-summary-<timestamp>.json`에 저장한다
-4. `last_validation_summary`를 갱신한다
-5. result `passed`면 `final_review_pending`으로 state 전이
-6. result `failed`면 `build_pending`으로 state 전이 후 stop
-7. state 갱신 후 `controller` 재판정
+2. 실행 결과(exit code, stdout)를 수집한다
+3. stdout에서 `VALIDATION_SUMMARY_JSON` 마커 다음 줄의 JSON 객체를 파싱한다
+   - 파싱 실패 시 exit code만 기준으로 판단한다 (0=pass, 비0=fail)
+4. 파싱된 JSON을 `evidence/validation-summary-<timestamp>.json`에 그대로 저장한다
+5. `last_validation_summary`를 갱신한다: `ref` (저장된 경로), `result`, `generated_at`
+6. result `pass` 또는 `pass_with_warn`이면 `final_review_pending`으로 state 전이
+7. result `fail`이면 `build_pending`으로 state 전이 후 stop
+8. state 갱신 후 `controller` 재판정
 
 validate-task 스크립트가 없으면: stop하고 사용자에게 보고한다.
 
@@ -443,7 +445,7 @@ evidence 필드는 control-flow가 계산한다. reviewer가 제공한 evidence 
 - `approval_stale`
 - `human_gate_required`
 - review `not_approved`
-- validation `failed`
+- validation result `fail`
 - bounded retry 1회 후에도 다시 승인되지 않음
 - `controller`가 stop 판정을 내림
 - `evidence_status: failed` (Q1: missing required targets 또는 Q2: bound violation)

@@ -249,11 +249,11 @@ review가 아직 없으면 `null`
 ### `last_validation_summary`
 validation이 아직 없으면 `null`
 그 외에는 아래 키를 가진 객체다.
-- `ref`
-- `commands_requested`
-- `commands_executed`
-- `result`
-- `evidence_refs`
+- `ref` — evidence 파일 경로 (`evidence/validation-summary-<timestamp>.json`)
+- `result` — `pass` | `pass_with_warn` | `fail`
+- `generated_at` — ISO 8601 timestamp
+
+세부 정보(`errors`, `warnings`, `checked_artifacts` 등)는 `ref` 파일 안에 있으며 state 객체에 중복 저장하지 않는다.
 
 ### `last_transition`
 필수 키:
@@ -309,8 +309,8 @@ validation이 아직 없으면 `null`
 
 ### validation 완료 시
 - `last_validation_summary`를 갱신한다
-- validation `passed`면 `final_review_pending`으로 이동
-- validation `failed`면 `build_pending`으로 이동하고 stop
+- validation result `pass` 또는 `pass_with_warn`이면 `final_review_pending`으로 이동
+- validation result `fail`이면 `build_pending`으로 이동하고 stop
 - `last_transition.trigger`는 `validation_passed` 또는 `validation_failed`
 
 ### stale 시

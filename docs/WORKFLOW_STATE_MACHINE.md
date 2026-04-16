@@ -1,6 +1,6 @@
 ---
 title: WORKFLOW_STATE_MACHINE
-version: 6
+version: 7
 status: active
 ---
 
@@ -146,7 +146,7 @@ status: active
 - 조건:
   - `validation-summary.json` evidence에 저장
   - `last_validation_summary` 갱신
-  - validation result `passed`
+  - validation result `pass` 또는 `pass_with_warn`
   - `pending_review.stage = final_review`
 
 ### 10. validation 실패
@@ -156,7 +156,7 @@ status: active
 - 조건:
   - `validation-summary.json` evidence에 저장
   - `last_validation_summary` 갱신
-  - validation result `failed`
+  - validation result `fail`
   - `revision_request.active = false`
   - 자동 재시도하지 않고 stop
 
@@ -204,7 +204,7 @@ status: active
 
 자동 진행하지 않는 경우:
 - review `not_approved` 후 pending state
-- validation `failed` 후 pending state
+- validation `fail` 후 pending state
 - `blocked`
 - `approval_stale`
 - `human_gate_required`
@@ -261,7 +261,7 @@ status: active
 - stale approval
 - specialist가 `status: blocked`
 - `evidence_status: failed` (Q1 또는 Q2 해당 시)
-- validation `failed`
+- validation result `fail`
 
 ## persistence invariant
 
