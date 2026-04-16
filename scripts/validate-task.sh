@@ -141,6 +141,10 @@ else
     "artifacts/build-summary.md"
     "artifacts/review-result.md"
   )
+
+  if [[ "$WORKFLOW_STATE" == "completed" ]]; then
+    REQUIRED_ARTIFACTS+=("artifacts/review-final.md")
+  fi
 fi
 
 for artifact in "${REQUIRED_ARTIFACTS[@]}"; do

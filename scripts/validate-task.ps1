@@ -128,6 +128,10 @@ if ($ExecutionMode -eq "lean") {
         "artifacts\build-summary.md",
         "artifacts\review-result.md"
     )
+
+    if ($WorkflowState -eq "completed") {
+        $RequiredArtifacts += "artifacts\review-final.md"
+    }
 }
 
 foreach ($artifact in $RequiredArtifacts) {

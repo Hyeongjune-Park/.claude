@@ -42,7 +42,7 @@ scripts\start-task.ps1 -TaskSlug <task-slug> [-ProjectRoot <path>] [-ExecutionMo
 |------|------|------|
 | Controller | `agents/controller.md` | state 판정, 다음 단계 결정 |
 | PO | `agents/po.md` | planning, build, bounded revision 생산 |
-| Reviewer | `agents/reviewer.md` | plan review, result review, final review |
+| Reviewer | `agents/reviewer.md` | lean review, plan review, result review, final review |
 
 ---
 
@@ -78,7 +78,7 @@ worktree 없이 격리 작업을 시작하면 `worktree-guard` hook이 차단한
 
 - `start-task` 없이 바로 `/control-flow` 호출 (state skeleton 없음)
 - approved plan 없이 build 단계 진입
-- final review 없이 완료 처리
+- strict 모드에서 final review 없이 완료 처리
 - worktree 없이 격리 작업 시작
 - 로컬 `.claude/docs/`에 전역 정책 문서 생성
 - sibling repository 읽기

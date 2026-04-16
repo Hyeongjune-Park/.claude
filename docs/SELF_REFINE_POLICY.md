@@ -15,6 +15,7 @@ status: active
 ## 적용 범위
 
 이 정책은 아래 review stage에 공통 적용한다.
+- `review` (lean)
 - `plan_review`
 - `result_review`
 - `final_review`
@@ -67,6 +68,7 @@ status: active
 
 ## stage별 target 규칙
 
+- `review`의 `approved_with_revisions` → `build` 재수행 (lean)
 - `plan_review`의 `approved_with_revisions` → `planning` 재수행
 - `result_review`의 `approved_with_revisions` → `build` 재수행
 - `final_review`의 `approved_with_revisions` → `build` 재수행

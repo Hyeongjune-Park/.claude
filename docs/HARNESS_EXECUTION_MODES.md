@@ -61,6 +61,10 @@ status: active
 - `evidence/validation-summary-<timestamp>.json`
 - `.claude/state/<feature-slug>.json`
 
+strict gate rule:
+- `validation_pending` / `final_review_pending` validation gates do not require `artifacts/review-final.md`.
+- `completed` validation gate requires `artifacts/review-final.md`.
+
 ## warning / block 기준
 
 ### block (즉시 stop)

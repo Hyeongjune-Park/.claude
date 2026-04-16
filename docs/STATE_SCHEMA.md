@@ -49,6 +49,7 @@ current schema와 맞지 않는 구형 state를 발견하면, orchestration laye
 - `implementation_pending` → `build_pending`
 - 축약된 `accepted_artifacts` 문자열 값 → current object shape
 - `artifacts.implementation_design` / `artifacts.review_implementation` / `artifacts.implementation` → `artifacts.build_summary` / `artifacts.review_result` (대응 관계 보존)
+- `artifacts.review` 키 누락 → `null`로 초기화 (v8 정규화)
 - `artifacts.acceptance` 키 누락 → `null`로 초기화 (v7 이전 state 정규화)
 
 구형 shape를 그대로 authority로 사용하지 않는다.
@@ -155,13 +156,14 @@ current schema와 맞지 않는 구형 state를 발견하면, orchestration laye
 ### `artifacts`
 필수 키:
 - `plan`
+- `review`
 - `review_plan`
 - `acceptance`
 - `build_summary`
 - `review_result`
 - `review_final`
 
-`plan`, `review_plan`, `build_summary`, `review_result`, `review_final`의 값은 `null` 또는 아래 키를 가진 객체다.
+`plan`, `review`, `review_plan`, `build_summary`, `review_result`, `review_final`의 값은 `null` 또는 아래 키를 가진 객체다.
 - `body_ref`
 - `meta_ref`
 - `history_body_ref`

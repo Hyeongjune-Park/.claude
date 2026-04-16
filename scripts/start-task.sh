@@ -71,17 +71,74 @@ if [[ ! -f "$STATE_FILE" ]]; then
   CREATED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   cat > "$STATE_FILE" <<EOF
 {
+  "schema_version": "state@8",
   "feature_slug": "$TASK_SLUG",
+  "active_project_root": "${PROJECT_ROOT//\\/\/}",
   "workflow_state": "planning_pending",
   "execution_mode": "$EXECUTION_MODE",
+  "last_completed_stage": null,
+  "status": "pending",
+  "verdict": "none",
+  "next_allowed": "planning",
+  "blocker_present": false,
+  "blocker_reason": "",
+  "human_input_required": false,
+  "scope_fingerprint": null,
+  "stale": false,
+  "stale_reason": "",
+  "evidence_policy_mode": "warning",
+  "policy_resolution": {
+    "ref": null,
+    "required_docs": [],
+    "consistent": false
+  },
+  "artifacts": {
+    "plan": null,
+    "review": null,
+    "review_plan": null,
+    "acceptance": null,
+    "build_summary": null,
+    "review_result": null,
+    "review_final": null
+  },
+  "accepted_artifacts": {
+    "plan": null,
+    "build_summary": null
+  },
+  "pending_review": {
+    "stage": null,
+    "artifact_ref": null,
+    "ledger_ref": null
+  },
+  "review_inputs": {
+    "review": null,
+    "plan_review": null,
+    "result_review": null,
+    "final_review": null
+  },
+  "revision_request": {
+    "active": false,
+    "source_review_stage": null,
+    "source_review_ref": null,
+    "target_stage": null,
+    "allowed_delta": [],
+    "forbidden_changes": [],
+    "scope_preserved": true,
+    "auto_fix_allowed": false,
+    "attempt_count": 0,
+    "max_attempts": 1
+  },
+  "last_review_evidence": null,
+  "last_validation_summary": null,
   "state_classification": "fresh_start",
   "last_transition": {
+    "from_state": null,
+    "to_state": "planning_pending",
     "trigger": "state_initialized",
-    "at": "$CREATED_AT"
+    "artifact_path": null,
+    "timestamp": "$CREATED_AT"
   },
-  "accepted_artifacts": {},
-  "revision_request": null,
-  "blocker_present": false,
+  "updated_at": "$CREATED_AT",
   "logs_ref": ".claude/logs/$TASK_SLUG"
 }
 EOF

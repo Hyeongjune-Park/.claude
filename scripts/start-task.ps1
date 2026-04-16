@@ -56,17 +56,74 @@ Write-Host "[start-task] directory bootstrap completed"
 if (-not (Test-Path $StateFile)) {
     $CreatedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
     $StateObject = [ordered]@{
+        schema_version = "state@8"
         feature_slug = $TaskSlug
+        active_project_root = $ProjectRoot
         workflow_state = "planning_pending"
         execution_mode = $ExecutionMode
+        last_completed_stage = $null
+        status = "pending"
+        verdict = "none"
+        next_allowed = "planning"
+        blocker_present = $false
+        blocker_reason = ""
+        human_input_required = $false
+        scope_fingerprint = $null
+        stale = $false
+        stale_reason = ""
+        evidence_policy_mode = "warning"
+        policy_resolution = [ordered]@{
+            ref = $null
+            required_docs = @()
+            consistent = $false
+        }
+        artifacts = [ordered]@{
+            plan = $null
+            review = $null
+            review_plan = $null
+            acceptance = $null
+            build_summary = $null
+            review_result = $null
+            review_final = $null
+        }
+        accepted_artifacts = [ordered]@{
+            plan = $null
+            build_summary = $null
+        }
+        pending_review = [ordered]@{
+            stage = $null
+            artifact_ref = $null
+            ledger_ref = $null
+        }
+        review_inputs = [ordered]@{
+            review = $null
+            plan_review = $null
+            result_review = $null
+            final_review = $null
+        }
+        revision_request = [ordered]@{
+            active = $false
+            source_review_stage = $null
+            source_review_ref = $null
+            target_stage = $null
+            allowed_delta = @()
+            forbidden_changes = @()
+            scope_preserved = $true
+            auto_fix_allowed = $false
+            attempt_count = 0
+            max_attempts = 1
+        }
+        last_review_evidence = $null
+        last_validation_summary = $null
         state_classification = "fresh_start"
         last_transition = [ordered]@{
+            from_state = $null
+            to_state = "planning_pending"
             trigger = "state_initialized"
-            at = $CreatedAt
+            artifact_path = $null
+            timestamp = $CreatedAt
         }
-        accepted_artifacts = [ordered]@{}
-        revision_request = $null
-        blocker_present = $false
+        updated_at = $CreatedAt
         logs_ref = ".claude/logs/$TaskSlug"
     }
     $StateJson = $StateObject | ConvertTo-Json -Depth 10
