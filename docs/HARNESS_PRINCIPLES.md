@@ -25,9 +25,8 @@ production이 만드는 것 (PO):
 - local validation 결과
 
 review가 만드는 것 (reviewer):
-- plan review verdict
-- result review verdict
-- final review verdict
+- lean: 단일 review verdict
+- strict: plan review / result review / final review verdict
 
 `controller`가 specialist work를 대신 만들면 안 되고, specialist가 workflow control을 대신 판단해도 안 된다.
 
@@ -95,7 +94,8 @@ reviewer는 이 범위를 넘겨 직접 읽기를 주장하면 안 된다.
 evidence 판정 정책:
 - Q1(missing required targets)와 Q2(bound violation): `evidence_status: failed` — workflow 차단
 - Q3(self-report vs observed trace 불일치): warning으로 기록하되 차단하지 않는다
-- orchestration layer는 반드시 observed `read trace`를 남긴다
+- strict에서는 observed `read trace`를 반드시 남긴다
+- lean에서는 핵심 직접 읽기 목록만 남겨도 된다 (warning 허용)
 - evidence 필드(required_read_targets, allowed_direct_reads, missing_read_targets, evidence_status, evidence_warnings)는 control-flow가 ledger/trace 기반으로 계산한다. reviewer가 제공해도 무시한다.
 
 ## 8. policy resolution은 단일 출처여야 한다
@@ -131,7 +131,7 @@ control-flow가 계산하여 채우는 항목 (reviewer가 제공해도 무시):
 아래 상황에서는 멈춘다.
 - 필수 policy 문서 누락
 - inconsistent policy resolution
-- 필수 artifact 누락
+- strict 필수 artifact 누락
 - 필수 `read ledger` 누락
 - state와 artifact 충돌
 - stale approval
@@ -147,14 +147,21 @@ control-flow가 계산하여 채우는 항목 (reviewer가 제공해도 무시):
 
 warning은 evidence와 state에 남기되, Q3만 해당하는 경우에는 자동 차단 사유로 승격하지 않는다.
 
-## 11. specialist stage는 좁게 유지한다
+## 11. lean을 기본으로 두고 strict는 조건부로 승격한다
+
+- 기본 execution mode는 `lean`이다.
+- `strict`는 high-risk 작업 또는 명시 요청에서만 기본 모드로 사용한다.
+- mode 누락/오염 시에는 안전하게 `strict`로 fallback한다.
+- mode별 상세 기준은 `HARNESS_EXECUTION_MODES.md`를 따른다.
+
+## 12. specialist stage는 좁게 유지한다
 
 - PO의 `planning` 모드는 구현하지 않는다.
 - PO의 `build` 모드는 승인된 plan 범위를 넘어 scope를 확장하지 않는다.
 - review 단계(plan_review / result_review / final_review)는 검토 대상 산출물을 다시 쓰지 않는다.
 - 어느 단계도 전체 소스 덤프를 하지 않는다.
 
-## 12. 공통 규칙은 공통 문서에 둔다
+## 13. 공통 규칙은 공통 문서에 둔다
 
 공유 규칙은 shared docs에 둔다. skill과 agent는 필요한 범위만 요약하고, 같은 정책을 여러 파일에 길게 중복하지 않는다.
 

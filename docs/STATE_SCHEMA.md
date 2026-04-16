@@ -1,6 +1,6 @@
 ---
 title: STATE_SCHEMA
-version: 7
+version: 8
 status: active
 ---
 
@@ -58,6 +58,7 @@ current schema와 맞지 않는 구형 state를 발견하면, orchestration laye
 - `schema_version`
 - `feature_slug`
 - `active_project_root`
+- `execution_mode`
 - `workflow_state`
 - `last_completed_stage`
 - `status`
@@ -84,7 +85,16 @@ current schema와 맞지 않는 구형 state를 발견하면, orchestration laye
 ## 값 규칙
 
 ### `schema_version`
-초기값: `state@7`
+초기값: `state@8`
+
+### `execution_mode`
+허용값:
+- `lean`
+- `strict`
+
+규칙:
+- 기본값은 `lean`
+- 값 누락 또는 오염 시 `strict`로 fallback한다.
 
 ### `workflow_state`
 허용값:
@@ -102,6 +112,7 @@ current schema와 맞지 않는 구형 state를 발견하면, orchestration laye
 ### `last_completed_stage`
 허용값 또는 `null`:
 - `planning`
+- `review`
 - `plan_review`
 - `build`
 - `result_review`
@@ -126,6 +137,7 @@ current schema와 맞지 않는 구형 state를 발견하면, orchestration laye
 ### `next_allowed`
 허용값:
 - `planning`
+- `review`
 - `plan_review`
 - `build`
 - `result_review`
@@ -160,8 +172,8 @@ current schema와 맞지 않는 구형 state를 발견하면, orchestration laye
 
 의미:
 - `acceptance`는 planning 단계에서 PO가 생성하는 정식 artifact다
-- validation은 acceptance 기준으로만 판정한다
-- `acceptance.md`가 없으면 `validation_pending` 진입 전 control-flow가 차단한다
+- strict validation은 acceptance 기준을 포함해 판정한다
+- strict 모드에서 `acceptance.md`가 없으면 `validation_pending` 진입 전 차단한다
 
 ### `accepted_artifacts`
 필수 키:
@@ -193,6 +205,7 @@ current schema와 맞지 않는 구형 state를 발견하면, orchestration laye
 
 ### `review_inputs`
 필수 키:
+- `review`
 - `plan_review`
 - `result_review`
 - `final_review`
@@ -309,7 +322,8 @@ validation이 아직 없으면 `null`
 
 ### validation 완료 시
 - `last_validation_summary`를 갱신한다
-- validation result `pass` 또는 `pass_with_warn`이면 `final_review_pending`으로 이동
+- lean에서 validation result `pass` 또는 `pass_with_warn`이면 `completed`로 이동
+- strict에서 validation result `pass` 또는 `pass_with_warn`이면 `final_review_pending`으로 이동
 - validation result `fail`이면 `build_pending`으로 이동하고 stop
 - `last_transition.trigger`는 `validation_passed` 또는 `validation_failed`
 

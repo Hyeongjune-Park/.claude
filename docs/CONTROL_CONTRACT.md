@@ -1,6 +1,6 @@
 ---
 title: CONTROL_CONTRACT
-version: 7
+version: 8
 status: active
 ---
 
@@ -26,13 +26,16 @@ canonical root:
 
 artifact 저장 쌍 (metadata tracked):
 - `artifacts/plan.md` + `artifacts/plan.meta.json`
+- `artifacts/review.md` + `artifacts/review.meta.json` (lean 기본 review)
 - `artifacts/review-plan.md` + `artifacts/review-plan.meta.json`
 - `artifacts/build-summary.md` + `artifacts/build-summary.meta.json`
 - `artifacts/review-result.md` + `artifacts/review-result.meta.json`
 - `artifacts/review-final.md` + `artifacts/review-final.meta.json`
 
 정식 co-artifacts (metadata 없음, body만 추적):
-- `artifacts/acceptance.md` (planning 단계에서 PO가 생성; validation의 판정 기준)
+- `artifacts/acceptance.md` (strict 모드 planning 단계에서 생성; strict validation 기준)
+
+mode별 최소 artifact는 `HARNESS_EXECUTION_MODES.md`를 기준으로 판정한다.
 
 supplementary artifact (추적하지 않음):
 - `artifacts/spec.md`
@@ -65,13 +68,14 @@ orchestration layer는 첫 블록을 `.meta.json`에, 두 번째 블록을 `.md`
 
 ```json
 {
-  "workflow_stage": "<planning|plan_review|build|result_review|final_review|worklog_update>",
+  "workflow_stage": "<planning|review|plan_review|build|result_review|final_review|worklog_update>",
+  "execution_mode": "<lean|strict>",
   "feature_slug": "<feature-slug>",
-  "artifact_type": "<plan|review_plan|build_summary|review_result|review_final|worklog>",
+  "artifact_type": "<plan|review|review_plan|build_summary|review_result|review_final|worklog>",
   "scope_fingerprint": "<string-or-null>",
   "status": "<completed|incomplete|blocked>",
   "verdict": "<none|approved|approved_with_revisions|not_approved>",
-  "next_allowed": "<planning|plan_review|build|result_review|validation|final_review|worklog_update|none>",
+  "next_allowed": "<planning|review|plan_review|build|result_review|validation|final_review|worklog_update|none>",
   "blocker_present": false,
   "blocker_reason": "",
   "human_input_required": false,
@@ -104,15 +108,27 @@ orchestration layer는 첫 블록을 `.meta.json`에, 두 번째 블록을 `.md`
 ### `workflow_stage`
 허용값:
 - `planning`
+- `review`
 - `plan_review`
 - `build`
 - `result_review`
 - `final_review`
 - `worklog_update`
 
+### `execution_mode`
+허용값:
+- `lean`
+- `strict`
+
+사용 규칙:
+- mode가 명시되지 않으면 `strict`로 fallback한다.
+- `lean`에서는 단일 review 흐름을 우선한다.
+- `strict`에서는 분리된 review 흐름(plan/result/final)을 유지한다.
+
 ### `artifact_type`
 허용값:
 - `plan`
+- `review`
 - `review_plan`
 - `build_summary`
 - `review_result`
@@ -137,6 +153,7 @@ review가 아닌 생산 단계는 `verdict: none`을 사용한다.
 ### `next_allowed`
 허용값:
 - `planning`
+- `review`
 - `plan_review`
 - `build`
 - `result_review`
@@ -235,11 +252,18 @@ stage별 자동 수정 한도를 뜻한다.
 
 ### `planning`
 - `verdict: none`
-- 정상 완료 시 `next_allowed: plan_review`
+- lean 정상 완료 시 `next_allowed: build`
+- strict 정상 완료 시 `next_allowed: plan_review`
 - `revision_class: none`
 - `parent_review_ref`는 bounded retry가 아니면 `null`
-- PO는 `plan.md`와 함께 `acceptance.md`를 반드시 저장해야 한다
-- `acceptance.md`가 없으면 control-flow는 malformed 처리한다
+- strict 모드에서는 `plan.md`와 함께 `acceptance.md`를 저장해야 한다
+
+### `review` (lean)
+- `verdict`는 `approved`, `approved_with_revisions`, `not_approved` 중 하나
+- `approved`면 `next_allowed: validation`
+- `approved_with_revisions`면 `next_allowed: build`
+- `not_approved`면 `next_allowed: build`
+- `artifact_under_review`는 build-summary artifact 경로
 
 ### `plan_review`
 - `verdict`는 `approved`, `approved_with_revisions`, `not_approved` 중 하나

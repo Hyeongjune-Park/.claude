@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
-# validate-task.sh — task 완료 전 필수 검증
-# 사용법: bash scripts/validate-task.sh <task-slug> [project-root]
+# validate-task.sh — task completion validation (mode-aware)
+# usage: bash scripts/validate-task.sh <task-slug> [project-root]
 #
-# 역할:
-#   - state 파일 존재 및 정합성 확인
-#   - 필수 artifact 존재 확인 (plan, review-plan, acceptance, build-summary, review-result)
-#   - acceptance.md 존재 확인 (validation은 acceptance 기준으로만 판정)
-#   - 위반 시 상세 피드백 출력
+# role:
+#   - check state file existence and basic consistency
+#   - check required artifacts for the active execution mode
+#   - print machine-readable JSON summary for control-flow
 #
-# 종료 코드:
-#   0 — 검증 통과 (PASS 또는 PASS with WARN)
-#   1 — 필수 조건 미충족 (FAIL)
+# exit codes:
+#   0 — pass / pass_with_warn
+#   1 — fail
 
 set -euo pipefail
 
@@ -30,6 +29,9 @@ LOGS_DIR="$CLAUDE_DIR/logs/${TASK_SLUG}"
 
 ERRORS=0
 WARNINGS=0
+WORKFLOW_STATE="unknown"
+EXECUTION_MODE="strict"
+SELECTED_REVIEW_ARTIFACT=""
 
 check_fail() {
   local code="$1"
@@ -54,7 +56,7 @@ echo "[validate-task] task: $TASK_SLUG"
 echo "[validate-task] root: $PROJECT_ROOT"
 echo ""
 
-# --- 1. state 파일 ---
+# --- 1. state file ---
 
 if [[ ! -f "$STATE_FILE" ]]; then
   check_fail "STATE_MISSING" \
@@ -63,16 +65,38 @@ if [[ ! -f "$STATE_FILE" ]]; then
 else
   echo "[OK] state 파일 존재: $STATE_FILE"
 
-  # workflow_state 추출 (jq 없이 grep으로)
-  WORKFLOW_STATE="$(grep -o '"workflow_state": *"[^"]*"' "$STATE_FILE" | head -1 | sed 's/.*: *"//' | tr -d '"')"
+  WORKFLOW_STATE="$(grep -o '"workflow_state": *"[^"]*"' "$STATE_FILE" | head -1 | sed 's/.*: *"//' | tr -d '"' || true)"
+  if [[ -z "$WORKFLOW_STATE" ]]; then
+    LEGACY_CURRENT_STATE="$(grep -o '"current_state": *"[^"]*"' "$STATE_FILE" | head -1 | sed 's/.*: *"//' | tr -d '"' || true)"
+    if [[ -n "$LEGACY_CURRENT_STATE" ]]; then
+      WORKFLOW_STATE="$LEGACY_CURRENT_STATE"
+      check_warn "LEGACY_STATE_KEY" "workflow_state가 없어 current_state를 fallback으로 사용했습니다."
+    fi
+  fi
+  if [[ -z "$WORKFLOW_STATE" ]]; then
+    WORKFLOW_STATE="unknown"
+    check_warn "WORKFLOW_STATE_MISSING" "state에서 workflow_state를 찾지 못했습니다."
+  fi
+
+  EXECUTION_MODE="$(grep -o '"execution_mode": *"[^"]*"' "$STATE_FILE" | head -1 | sed 's/.*: *"//' | tr -d '"' || true)"
+  if [[ -z "$EXECUTION_MODE" ]]; then
+    EXECUTION_MODE="strict"
+    check_warn "EXECUTION_MODE_MISSING" "execution_mode가 없어 strict로 fallback했습니다."
+  fi
+  if [[ "$EXECUTION_MODE" != "lean" && "$EXECUTION_MODE" != "strict" ]]; then
+    check_warn "EXECUTION_MODE_INVALID" "알 수 없는 execution_mode($EXECUTION_MODE)로 strict fallback 적용."
+    EXECUTION_MODE="strict"
+  fi
+
   echo "[OK] workflow_state: $WORKFLOW_STATE"
+  echo "[OK] execution_mode: $EXECUTION_MODE"
 
   if [[ "$WORKFLOW_STATE" != "completed" && "$WORKFLOW_STATE" != "validation_pending" && "$WORKFLOW_STATE" != "final_review_pending" ]]; then
     check_warn "STATE_NOT_READY" "workflow_state가 예상 단계가 아닙니다: $WORKFLOW_STATE"
   fi
 fi
 
-# --- 2. workflow 디렉터리 ---
+# --- 2. workflow directory ---
 
 if [[ ! -d "$WORKFLOW_DIR" ]]; then
   check_fail "WORKFLOW_DIR_MISSING" \
@@ -82,15 +106,42 @@ else
   echo "[OK] workflow 디렉터리 존재"
 fi
 
-# --- 3. 필수 artifact ---
+# --- 3. required artifacts by mode ---
 
-REQUIRED_ARTIFACTS=(
-  "artifacts/plan.md"
-  "artifacts/review-plan.md"
-  "artifacts/acceptance.md"
-  "artifacts/build-summary.md"
-  "artifacts/review-result.md"
-)
+if [[ "$EXECUTION_MODE" == "lean" ]]; then
+  REQUIRED_ARTIFACTS=(
+    "artifacts/plan.md"
+    "artifacts/build-summary.md"
+  )
+
+  REVIEW_CANDIDATES=(
+    "artifacts/review.md"
+    "artifacts/review-result.md"
+    "artifacts/review-plan.md"
+  )
+
+  for candidate in "${REVIEW_CANDIDATES[@]}"; do
+    if [[ -f "$WORKFLOW_DIR/$candidate" ]]; then
+      SELECTED_REVIEW_ARTIFACT="$candidate"
+      break
+    fi
+  done
+  if [[ -z "$SELECTED_REVIEW_ARTIFACT" ]]; then
+    check_fail "REVIEW_ARTIFACT_MISSING" \
+      "lean mode 필수 review artifact(review.md 또는 review-result.md 또는 review-plan.md)가 없습니다." \
+      "/control-flow 를 실행해 review 단계를 완료하세요"
+  else
+    echo "[OK] review artifact: $SELECTED_REVIEW_ARTIFACT"
+  fi
+else
+  REQUIRED_ARTIFACTS=(
+    "artifacts/plan.md"
+    "artifacts/review-plan.md"
+    "artifacts/acceptance.md"
+    "artifacts/build-summary.md"
+    "artifacts/review-result.md"
+  )
+fi
 
 for artifact in "${REQUIRED_ARTIFACTS[@]}"; do
   ARTIFACT_PATH="$WORKFLOW_DIR/$artifact"
@@ -103,7 +154,7 @@ for artifact in "${REQUIRED_ARTIFACTS[@]}"; do
   fi
 done
 
-# --- 4. logs 디렉터리 ---
+# --- 4. logs directory ---
 
 if [[ ! -d "$LOGS_DIR" ]]; then
   check_warn "LOGS_DIR_MISSING" "logs 디렉터리가 없습니다: $LOGS_DIR"
@@ -111,7 +162,7 @@ else
   echo "[OK] logs 디렉터리 존재"
 fi
 
-# --- 결과 요약 ---
+# --- summary ---
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -128,15 +179,27 @@ else
   RESULT="pass"
 fi
 
-# --- machine-readable summary (stdout JSON) ---
-# control-flow는 이 JSON 줄을 파싱해 evidence/validation-summary-<timestamp>.json을 작성한다.
+CHECKED_ARTIFACTS=("${REQUIRED_ARTIFACTS[@]}")
+if [[ -n "$SELECTED_REVIEW_ARTIFACT" ]]; then
+  CHECKED_ARTIFACTS+=("$SELECTED_REVIEW_ARTIFACT")
+fi
+
+ARTIFACT_LIST_JSON="["
+for artifact in "${CHECKED_ARTIFACTS[@]}"; do
+  normalized="${artifact//\\//}"
+  if [[ "$ARTIFACT_LIST_JSON" != "[" ]]; then
+    ARTIFACT_LIST_JSON+=","
+  fi
+  ARTIFACT_LIST_JSON+="\"$normalized\""
+done
+ARTIFACT_LIST_JSON+="]"
 
 GENERATED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "unknown")"
 
 echo ""
 echo "VALIDATION_SUMMARY_JSON"
 cat <<EOF
-{"result":"$RESULT","errors":$ERRORS,"warnings":$WARNINGS,"checked_artifacts":$(printf '%s\n' "${REQUIRED_ARTIFACTS[@]}" | jq -R . | jq -sc . 2>/dev/null || echo "[]"),"workflow_state":"${WORKFLOW_STATE:-unknown}","task_slug":"$TASK_SLUG","generated_at":"$GENERATED_AT"}
+{"result":"$RESULT","errors":$ERRORS,"warnings":$WARNINGS,"checked_artifacts":$ARTIFACT_LIST_JSON,"workflow_state":"$WORKFLOW_STATE","task_slug":"$TASK_SLUG","generated_at":"$GENERATED_AT","execution_mode":"$EXECUTION_MODE"}
 EOF
 
 if [[ "$RESULT" == "fail" ]]; then

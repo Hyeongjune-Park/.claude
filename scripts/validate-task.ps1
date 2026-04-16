@@ -1,15 +1,6 @@
-# validate-task.ps1 — task 완료 전 필수 검증 (Windows)
-# 사용법: .\scripts\validate-task.ps1 -TaskSlug <task-slug> [-ProjectRoot <path>]
-#
-# 역할:
-#   - state 파일 존재 및 정합성 확인
-#   - 필수 artifact 존재 확인 (plan, review-plan, acceptance, build-summary, review-result)
-#   - acceptance.md 존재 확인 (validation은 acceptance 기준으로만 판정)
-#   - 위반 시 상세 피드백 출력
-#
-# 종료 코드:
-#   0 — 검증 통과 (PASS 또는 PASS with WARN)
-#   1 — 필수 조건 미충족 (FAIL)
+# validate-task.ps1 - task completion validation (mode-aware)
+# Usage:
+#   .\scripts\validate-task.ps1 -TaskSlug <task-slug> [-ProjectRoot <path>]
 
 param(
     [Parameter(Mandatory=$true)]
@@ -29,13 +20,17 @@ $LogsDir     = Join-Path $ClaudeDir "logs\$TaskSlug"
 
 $Errors   = 0
 $Warnings = 0
+$WorkflowState = "unknown"
+$ExecutionMode = "strict"
+$SelectedReviewArtifact = $null
+$RequiredArtifacts = @()
 
 function Write-Violation($Code, $Desc, $Fix) {
     Write-Host ""
     Write-Host "[VIOLATION] $Code"
-    Write-Host "  설명    : $Desc"
-    Write-Host "  수정 경로: $Fix"
-    Write-Host "  로그 ref : $LogsDir\events.ndjson"
+    Write-Host "  description: $Desc"
+    Write-Host "  fix path   : $Fix"
+    Write-Host "  logs ref   : $LogsDir\events.ndjson"
     $script:Errors++
 }
 
@@ -48,93 +43,152 @@ Write-Host "[validate-task] task: $TaskSlug"
 Write-Host "[validate-task] root: $ProjectRoot"
 Write-Host ""
 
-# --- 1. state 파일 ---
+# --- 1) state file ---
 
 if (-not (Test-Path $StateFile)) {
     Write-Violation "STATE_MISSING" `
-        "state 파일이 없습니다: $StateFile" `
-        ".\scripts\start-task.ps1 -TaskSlug $TaskSlug -ProjectRoot '$ProjectRoot' 로 초기화 후 /control-flow 재실행"
+        "state file is missing: $StateFile" `
+        ".\scripts\start-task.ps1 -TaskSlug $TaskSlug -ProjectRoot '$ProjectRoot' then rerun /control-flow"
 } else {
-    Write-Host "[OK] state 파일 존재: $StateFile"
+    Write-Host "[OK] state file: $StateFile"
     $StateContent = Get-Content $StateFile -Raw
+
     if ($StateContent -match '"workflow_state"\s*:\s*"([^"]+)"') {
         $WorkflowState = $Matches[1]
-        Write-Host "[OK] workflow_state: $WorkflowState"
-        if ($WorkflowState -ne "completed" -and $WorkflowState -ne "validation_pending" -and $WorkflowState -ne "final_review_pending") {
-            Write-Warn "STATE_NOT_READY" "workflow_state가 예상 단계가 아닙니다: $WorkflowState"
-        }
+    } elseif ($StateContent -match '"current_state"\s*:\s*"([^"]+)"') {
+        $WorkflowState = $Matches[1]
+        Write-Warn "LEGACY_STATE_KEY" "workflow_state not found; current_state fallback was used."
+    } else {
+        Write-Warn "WORKFLOW_STATE_MISSING" "workflow_state not found in state file."
+    }
+
+    if ($StateContent -match '"execution_mode"\s*:\s*"([^"]+)"') {
+        $ExecutionMode = $Matches[1]
+    } else {
+        $ExecutionMode = "strict"
+        Write-Warn "EXECUTION_MODE_MISSING" "execution_mode not found; strict fallback was used."
+    }
+
+    if ($ExecutionMode -ne "lean" -and $ExecutionMode -ne "strict") {
+        Write-Warn "EXECUTION_MODE_INVALID" "unknown execution_mode '$ExecutionMode'; strict fallback was used."
+        $ExecutionMode = "strict"
+    }
+
+    Write-Host "[OK] workflow_state: $WorkflowState"
+    Write-Host "[OK] execution_mode: $ExecutionMode"
+
+    if ($WorkflowState -ne "completed" -and $WorkflowState -ne "validation_pending" -and $WorkflowState -ne "final_review_pending") {
+        Write-Warn "STATE_NOT_READY" "workflow_state is not a typical completion gate: $WorkflowState"
     }
 }
 
-# --- 2. workflow 디렉터리 ---
+# --- 2) workflow directory ---
 
 if (-not (Test-Path $WorkflowDir -PathType Container)) {
     Write-Violation "WORKFLOW_DIR_MISSING" `
-        "workflow 디렉터리가 없습니다: $WorkflowDir" `
-        ".\scripts\start-task.ps1 -TaskSlug $TaskSlug 로 초기화"
+        "workflow directory is missing: $WorkflowDir" `
+        ".\scripts\start-task.ps1 -TaskSlug $TaskSlug -ProjectRoot '$ProjectRoot'"
 } else {
-    Write-Host "[OK] workflow 디렉터리 존재"
+    Write-Host "[OK] workflow directory exists"
 }
 
-# --- 3. 필수 artifact ---
+# --- 3) mode-aware required artifacts ---
 
-$RequiredArtifacts = @(
-    "artifacts\plan.md",
-    "artifacts\review-plan.md",
-    "artifacts\acceptance.md",
-    "artifacts\build-summary.md",
-    "artifacts\review-result.md"
-)
+if ($ExecutionMode -eq "lean") {
+    $RequiredArtifacts = @(
+        "artifacts\plan.md",
+        "artifacts\build-summary.md"
+    )
+
+    $ReviewCandidates = @(
+        "artifacts\review.md",
+        "artifacts\review-result.md",
+        "artifacts\review-plan.md"
+    )
+
+    foreach ($candidate in $ReviewCandidates) {
+        if (Test-Path (Join-Path $WorkflowDir $candidate)) {
+            $SelectedReviewArtifact = $candidate
+            break
+        }
+    }
+
+    if ($null -eq $SelectedReviewArtifact) {
+        Write-Violation "REVIEW_ARTIFACT_MISSING" `
+            "lean mode requires one review artifact (review.md or review-result.md or review-plan.md)." `
+            "run /control-flow and finish the review step"
+    } else {
+        Write-Host "[OK] review artifact: $SelectedReviewArtifact"
+    }
+} else {
+    $RequiredArtifacts = @(
+        "artifacts\plan.md",
+        "artifacts\review-plan.md",
+        "artifacts\acceptance.md",
+        "artifacts\build-summary.md",
+        "artifacts\review-result.md"
+    )
+}
 
 foreach ($artifact in $RequiredArtifacts) {
-    $ArtifactPath = Join-Path $WorkflowDir $artifact
-    if (-not (Test-Path $ArtifactPath)) {
+    if (-not (Test-Path (Join-Path $WorkflowDir $artifact))) {
         Write-Violation "ARTIFACT_MISSING:$artifact" `
-            "필수 artifact가 없습니다: $artifact" `
-            "/control-flow 를 실행해 해당 단계까지 워크플로를 진행하세요"
+            "required artifact is missing: $artifact" `
+            "run /control-flow until the required stage is completed"
     } else {
         Write-Host "[OK] artifact: $artifact"
     }
 }
 
-# --- 4. logs 디렉터리 ---
+# --- 4) logs directory ---
 
 if (-not (Test-Path $LogsDir -PathType Container)) {
-    Write-Warn "LOGS_DIR_MISSING" "logs 디렉터리가 없습니다: $LogsDir"
+    Write-Warn "LOGS_DIR_MISSING" "logs directory is missing: $LogsDir"
 } else {
-    Write-Host "[OK] logs 디렉터리 존재"
+    Write-Host "[OK] logs directory exists"
 }
 
-# --- 결과 요약 ---
+# --- summary ---
 
 Write-Host ""
-Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-Write-Host "[validate-task] 결과 요약"
-Write-Host "  오류  : $Errors"
-Write-Host "  경고  : $Warnings"
-Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+Write-Host "===================================="
+Write-Host "[validate-task] summary"
+Write-Host "  errors  : $Errors"
+Write-Host "  warnings: $Warnings"
+Write-Host "===================================="
 
 $Result = if ($Errors -gt 0) { "fail" } elseif ($Warnings -gt 0) { "pass_with_warn" } else { "pass" }
-
-# --- machine-readable summary (stdout JSON) ---
-# control-flow는 이 JSON 줄을 파싱해 evidence/validation-summary-<timestamp>.json을 작성한다.
-
 $GeneratedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-$ArtifactList = ($RequiredArtifacts | ForEach-Object { '"' + $_.Replace('\','/') + '"' }) -join ","
 
-$WorkflowStateVal = if ($StateContent -match '"workflow_state"\s*:\s*"([^"]+)"') { $Matches[1] } else { "unknown" }
+$CheckedArtifacts = @($RequiredArtifacts | ForEach-Object { $_ -replace '\\','/' })
+if ($null -ne $SelectedReviewArtifact) {
+    $CheckedArtifacts += ($SelectedReviewArtifact -replace '\\','/')
+}
+
+$SummaryObject = [ordered]@{
+    result = $Result
+    errors = $Errors
+    warnings = $Warnings
+    checked_artifacts = $CheckedArtifacts
+    workflow_state = $WorkflowState
+    task_slug = $TaskSlug
+    generated_at = $GeneratedAt
+    execution_mode = $ExecutionMode
+}
 
 Write-Host ""
 Write-Host "VALIDATION_SUMMARY_JSON"
-Write-Host "{`"result`":`"$Result`",`"errors`":$Errors,`"warnings`":$Warnings,`"checked_artifacts`":[$ArtifactList],`"workflow_state`":`"$WorkflowStateVal`",`"task_slug`":`"$TaskSlug`",`"generated_at`":`"$GeneratedAt`"}"
+Write-Host ($SummaryObject | ConvertTo-Json -Compress)
 
 if ($Errors -gt 0) {
-    Write-Host "[FAIL] 필수 조건 미충족. 위 오류를 해결 후 재시도하세요."
+    Write-Host "[FAIL] required checks failed."
     exit 1
-} elseif ($Warnings -gt 0) {
-    Write-Host "[PASS with WARN] 검증 통과 (경고 있음)."
-    exit 0
-} else {
-    Write-Host "[PASS] 모든 검증 통과."
+}
+
+if ($Warnings -gt 0) {
+    Write-Host "[PASS with WARN] validation passed with warnings."
     exit 0
 }
+
+Write-Host "[PASS] all checks passed."
+exit 0

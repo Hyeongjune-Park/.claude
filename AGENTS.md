@@ -15,14 +15,15 @@
 
 ```bash
 # Unix/Mac
-bash scripts/start-task.sh <task-slug> [project-root]
+bash scripts/start-task.sh <task-slug> [project-root] [execution-mode]
 
 # Windows
-scripts\start-task.ps1 -TaskSlug <task-slug> [-ProjectRoot <path>]
+scripts\start-task.ps1 -TaskSlug <task-slug> [-ProjectRoot <path>] [-ExecutionMode <lean|strict>]
 ```
 
 - `task-slug`: 소문자, 하이픈 구분 (예: `user-auth-refactor`)
 - `project-root`: 생략 시 현재 디렉터리 사용
+- `execution-mode`: 생략 시 `lean` (`lean` 또는 `strict`)
 - 실행 후 `.claude/state/<slug>.json`, `.claude/workflow/<slug>/`, `.claude/logs/<slug>/` 생성됨
 
 ---
@@ -66,6 +67,7 @@ worktree 없이 격리 작업을 시작하면 `worktree-guard` hook이 차단한
 | harness 원칙 | `docs/HARNESS_PRINCIPLES.md` |
 | harness 범위 | `docs/HARNESS_SCOPE.md` |
 | self-refine 정책 | `docs/SELF_REFINE_POLICY.md` |
+| 실행 모드 정책 | `docs/HARNESS_EXECUTION_MODES.md` |
 | bootstrap 스크립트 | `scripts/` |
 | guardrail hooks | `hooks/` |
 | 로컬 프로젝트 템플릿 | `templates/CLAUDE.md` |

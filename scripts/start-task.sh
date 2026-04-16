@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # start-task.sh — task bootstrap script
-# 사용법: bash scripts/start-task.sh <task-slug> [project-root]
+# 사용법: bash scripts/start-task.sh <task-slug> [project-root] [execution-mode]
 #
 # 역할:
 #   - task slug 유효성 검사
@@ -13,12 +13,13 @@ set -euo pipefail
 
 TASK_SLUG="${1:-}"
 PROJECT_ROOT="${2:-$(pwd)}"
+EXECUTION_MODE="${3:-lean}"
 
 # --- 입력 검증 ---
 
 if [[ -z "$TASK_SLUG" ]]; then
   echo "[ERROR] task-slug가 필요합니다."
-  echo "사용법: bash scripts/start-task.sh <task-slug> [project-root]"
+  echo "사용법: bash scripts/start-task.sh <task-slug> [project-root] [execution-mode]"
   exit 1
 fi
 
@@ -32,6 +33,11 @@ if [[ ! -d "$PROJECT_ROOT" ]]; then
   exit 1
 fi
 
+if [[ "$EXECUTION_MODE" != "lean" && "$EXECUTION_MODE" != "strict" ]]; then
+  echo "[ERROR] execution-mode는 lean 또는 strict만 허용합니다: $EXECUTION_MODE"
+  exit 1
+fi
+
 CLAUDE_DIR="$PROJECT_ROOT/.claude"
 STATE_FILE="$CLAUDE_DIR/state/${TASK_SLUG}.json"
 WORKFLOW_DIR="$CLAUDE_DIR/workflow/${TASK_SLUG}"
@@ -39,6 +45,7 @@ LOGS_DIR="$CLAUDE_DIR/logs/${TASK_SLUG}"
 
 echo "[start-task] task: $TASK_SLUG"
 echo "[start-task] root: $PROJECT_ROOT"
+echo "[start-task] mode: $EXECUTION_MODE"
 
 # --- 이미 존재하면 경고 ---
 
@@ -65,7 +72,8 @@ if [[ ! -f "$STATE_FILE" ]]; then
   cat > "$STATE_FILE" <<EOF
 {
   "feature_slug": "$TASK_SLUG",
-  "current_state": "planning_pending",
+  "workflow_state": "planning_pending",
+  "execution_mode": "$EXECUTION_MODE",
   "state_classification": "fresh_start",
   "last_transition": {
     "trigger": "state_initialized",
