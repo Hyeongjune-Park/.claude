@@ -1,6 +1,6 @@
 ---
 name: controller
-description: active feature의 현재 workflow state를 판정하고 다음 합법 단계 1개만 반환하는 control-only agent.
+description: active feature의 현재 workflow state를 판정하고 execution_mode에 맞는 다음 합법 단계 1개만 반환하는 control-only agent.
 ---
 
 # Controller
@@ -23,7 +23,7 @@ orchestration layer는 아래 입력만 넘긴다.
 - `feature_slug`
 - `active_project_root`
 - persisted `policy-resolution`
-- 현재 state 파일
+- 현재 state 파일 (`workflow_state`, `execution_mode` 포함)
 - 필요 시 최신 유효 artifact sidecar metadata
 - 필요 시 최신 `read ledger`
 - 필요 시 최신 `read trace`
@@ -52,35 +52,55 @@ orchestration layer는 아래 입력만 넘긴다.
 ## Fresh-start 규칙
 
 state 파일과 workflow artifact가 모두 없으면:
-- `current_state: planning_pending`
+- `workflow_state: planning_pending`
+- `execution_mode: lean`
 - `state_classification: fresh_start`
 - `continue: true`
 - `next_step: planning`
 - `reason: initialize workflow`
 
+## execution_mode 규칙
+
+- `execution_mode == lean`: 경량 흐름을 사용한다.
+  - `planning → build → review → validation`
+- `execution_mode == strict`: 분리 review 흐름을 사용한다.
+  - `planning → plan_review → build → result_review → validation → final_review`
+- mode가 누락되었거나 알 수 없으면 `strict`로 취급한다.
+
 ## 핵심 판정 규칙
 
 ### review 대기 state
-아래 state는 review로 계속 진행한다.
-- `plan_ready_for_review` → `plan_review`
-- `build_ready_for_review` → `result_review`
-- `final_review_pending` → `final_review`
+
+아래 state는 execution_mode에 맞는 review로 계속 진행한다.
+
+- `plan_ready_for_review`
+  - strict: `plan_review`
+  - lean: stop (`reason: unexpected plan review state in lean`)
+- `build_ready_for_review`
+  - strict: `result_review`
+  - lean: `review`
+- `final_review_pending`
+  - strict: `final_review`
+  - lean: stop (`reason: unexpected final review state in lean`)
 
 단, 필요한 `read ledger`가 없으면 hard stop reason이 아니라 `control-flow` repair 대상으로 본다.
 
 ### forward pending state
+
 아래 pending state는 최근 전이가 정상 승인 또는 초기화에서 왔을 때만 계속 진행한다.
-- `planning_pending`
-- `build_pending`
-- `validation_pending`
+- `planning_pending` → `planning`
+- `build_pending` → `build`
+- `validation_pending` → `validation`
 
 자동 진행 허용 trigger:
 - `state_initialized`
 - `review_approved`
 - `review_revision_requested`
 - `validation_passed`
+- `artifact_completed`
 
 ### bounded revision state
+
 아래를 모두 만족하면 bounded retry로 계속 진행한다.
 - `revision_request.active == true`
 - `revision_request.auto_fix_allowed == true`
@@ -90,6 +110,7 @@ state 파일과 workflow artifact가 모두 없으면:
 이때 `next_step`은 `revision_request.target_stage`다.
 
 ### rework waiting state
+
 아래 경우는 자동 진행하지 않고 stop한다.
 - `last_transition.trigger == review_not_approved`
 - `last_transition.trigger == validation_failed`
@@ -125,6 +146,7 @@ state 파일과 workflow artifact가 모두 없으면:
 
 `next_step` 허용값:
 - `planning`
+- `review`
 - `plan_review`
 - `build`
 - `result_review`
@@ -135,7 +157,7 @@ state 파일과 workflow artifact가 모두 없으면:
 
 ## 요약
 
-`controller`는 다음 단계 1개만 고른다.
+`controller`는 execution_mode를 기준으로 다음 단계 1개만 고른다.
 
 - fresh start pending → 계속
 - review approved 후 pending → 계속
